@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6ef">
+  <meta name="description" content="A cozy plant care and breeding game that grows with your local clock.">
+  <title>Verdant · The Greenhouse</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./garden.js" defer></script>
+  <script src="./plants.js" defer></script>
+  <script src="./game.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#greenhouse" aria-label="Verdant home">
+        <span class="brand-icon" data-icon="sprout"></span><span>Verdant</span>
+      </a>
+      <nav id="navigation" aria-label="Game areas">
+        <a href="#greenhouse" data-page="greenhouse"><span data-icon="home"></span>Greenhouse</a>
+        <a href="#market" data-page="market"><span data-icon="shop"></span>Market</a>
+        <a href="#breeding" data-page="breeding"><span data-icon="dna"></span>Breeding</a>
+        <a href="#guide" data-page="guide"><span data-icon="book"></span>Field Guide</a>
+      </nav>
+      <div class="header-stats">
+        <time id="local-clock" class="local-clock"></time>
+        <span class="wallet" id="wallet"></span>
+      </div>
+    </div>
+  </header>
+  <main id="app"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <noscript><p class="noscript">Enable JavaScript to play Verdant.</p></noscript>
+</body>
+</html>
