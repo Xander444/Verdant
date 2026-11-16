@@ -196,6 +196,38 @@ nav a[aria-current] { color: #2b5639; background: #e8ede2; }
 .text-link { display: inline-flex; align-items: center; gap: 6px; color: #3d6747; font-size: .82rem; font-weight: 750; }
 .text-link:hover { text-decoration: underline; }
 .shelf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(193px, 1fr)); gap: 10px; }
+.shelf-hint strong { color: var(--ink); }
+.shelf-extras { margin-top: 10px; }
+.station-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.station {
+  --station-light: #e8ecdd; --station-floor: #d9ddcf; --station-ink: #4e694e;
+  display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+}
+.station-1 { --station-light: #f2edda; --station-floor: #e1dbc5; --station-ink: #765d38; }
+.station-2 { --station-light: #e4ece7; --station-floor: #d3ded9; --station-ink: #41675e; }
+.station-heading {
+  min-height: 65px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 10px;
+  background: linear-gradient(170deg, #fffef8, var(--station-light));
+}
+.station-heading .tile-icon { width: 35px; height: 35px; color: var(--station-ink); background: #fffef6bc; }
+.station-heading h3 { font-size: 22px; }
+.station-heading p { color: var(--muted); font-size: .73rem; }
+.station-recommended { margin-left: auto; color: #315941; background: #eef5e7; }
+.station-pots {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 152px), 1fr)); gap: 6px; align-content: start;
+  flex: 1; min-height: 83px; padding: 9px;
+  background: linear-gradient(transparent 81%, #57694b16 82% 83%, var(--station-floor) 84%), var(--station-light);
+}
+.station-empty { align-self: stretch; display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 62px; color: var(--station-ink); font-size: .76rem; }
+.station-pots .shelf-plant { min-height: 61px; cursor: grab; }
+.station-pots .shelf-plant:active { cursor: grabbing; }
+.station-pots .shelf-preview { width: 45px; height: 45px; }
+.station-pots .shelf-plant.is-dragged { opacity: .48; }
+.station.drop-target { border-color: #7c9d7e; outline: 2px solid #7c9d7e; outline-offset: 1px; }
+.station-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px; padding: 8px 10px; }
+.station-footer > small { color: var(--muted); font-size: .72rem; }
+.station-footer > small svg { color: #508183; }
+.station-footer .button { min-height: 30px; }
 .shelf-plant {
   display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 69px; padding: 5px 10px 5px 5px; text-align: left;
   background: #fdfcf6; border: 1px solid var(--line); border-radius: 11px; line-height: 1.24;
@@ -310,6 +342,43 @@ dialog::backdrop { background: #162c20a6; }
 .move-options { display: grid; gap: 7px; margin-top: 12px; }
 .move-options button { justify-content: flex-start; gap: 8px; }
 .move-options button.recommended { border-color: #89a787; }
+.water-scene {
+  position: relative; overflow: hidden; display: grid; justify-items: center; align-items: end; height: 148px; margin: 1px 0 11px;
+  border: 1px solid #e1e7d9; border-radius: 10px;
+  background: radial-gradient(ellipse at 44% 12%, #f5f1d8, transparent 67%), linear-gradient(#e6eddd 85%, #dbe5d3 85%);
+}
+.water-scene .plant-art { width: 167px; }
+.water-can {
+  position: absolute; left: calc(50% - 106px); top: 14px; display: grid; place-items: center; width: 61px; height: 55px;
+  color: #326b5a; transform: rotate(-11deg); transform-origin: 80% 45%; transition: transform .24s ease;
+}
+.water-can svg { width: 54px; height: 54px; stroke-width: 1.35; }
+.water-stream {
+  position: absolute; left: calc(50% - 60px); top: 50px; width: 15px; height: 66px; opacity: 0; pointer-events: none;
+  border-radius: 50%; transform: skewX(18deg);
+  background: repeating-linear-gradient(180deg, #65adad 0 4px, transparent 4px 10px) 0 0 / 3px 10px repeat-y,
+    repeating-linear-gradient(180deg, transparent 0 4px, #93bfaf 4px 8px, transparent 8px 10px) 7px 0 / 3px 10px repeat-y;
+}
+.water-panel.is-pouring .water-can { transform: rotate(26deg); }
+.water-panel.is-pouring .water-stream { opacity: .9; animation: falling-water .46s linear infinite; }
+@keyframes falling-water { to { background-position: 0 10px, 7px 10px; } }
+.water-readout { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 5px; color: var(--muted); font-size: .84rem; }
+.water-readout strong { color: var(--ink); }
+.water-gauge { position: relative; height: 12px; margin-top: 5px; border-radius: 20px; background: #ebe3cc; }
+.water-band { position: absolute; inset: 0 auto 0 var(--band-start); width: var(--band-width); background: #acd1a6; }
+.water-marker {
+  position: absolute; left: clamp(3px, var(--level), calc(100% - 3px)); top: -2px; bottom: -2px;
+  width: 4px; border-radius: 5px; background: #2b6873; transform: translateX(-50%); box-shadow: 0 0 0 2px #fffef8;
+}
+.water-panel.too-wet .water-marker { background: #9a5244; }
+.water-panel.too-wet [data-water-condition] { color: #9a5244; }
+.pour-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+[data-pour-hold] { touch-action: none; user-select: none; -webkit-touch-callout: none; }
+.pour-result { min-height: 1.5em; margin-top: 5px; }
+@media (prefers-reduced-motion: reduce) {
+  .water-can { transition: none; }
+  .water-panel.is-pouring .water-stream { animation: none; }
+}
 .phenotypes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .phenotype { display: flex; align-items: center; padding: 4px; gap: 6px; border: 1px solid #e8ebdf; border-radius: 8px; font-size: .78rem; }
 .phenotype small { display: block; font-size: .68rem; color: var(--muted); }
@@ -342,6 +411,7 @@ dialog::backdrop { background: #162c20a6; }
 }
 @media (max-width: 690px) {
   .order-grid { grid-template-columns: 1fr; gap: 8px; }
+  .station-grid { grid-template-columns: 1fr; gap: 8px; }
 }
 @media (max-width: 550px) {
   .topbar-inner, #app { width: calc(100% - 26px); }

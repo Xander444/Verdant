@@ -15,34 +15,59 @@ window.Garden = (() => {
     { name: "Night", icon: "moon", until: 24, evaporation: .57, growth: .36 },
   ];
   const LOCATIONS = ["Shade", "Window", "Grow lamp"];
+  const CLASSIC_GROUP_SIZE = 5;
+  const CLASSIC_SPECIES_COUNT = RARITIES.length * CLASSIC_GROUP_SIZE;
   const MARKET_PRICES = [
-    [13, 16, 17, 19, 21], [38, 43, 48, 53, 58], [105, 118, 131, 144, 157], [275, 305, 335, 365, 395],
+    [13, 16, 17, 19, 21, 17, 20, 22],
+    [38, 43, 48, 53, 58, 46, 55, 62],
+    [105, 118, 131, 144, 157, 123, 149, 164],
+    [275, 305, 335, 365, 395, 345, 380, 425],
   ];
-  const CATALOG = [
-    ["golden", "Golden Pothos", "trailing", "#55763e", ["Golden Speckle", "Jade", "Lemon Splash"], "A forgiving trailing vine with golden flecks."],
-    ["jade", "Jade Plant", "succulent", "#66864e", ["Classic Green", "Crimson Edge"], "Rounded leaves stack up like little green coins."],
-    ["spider", "Spider Plant", "grass", "#6a9046", ["Green Stripe", "Ivory Ribbon", "Lime Twist"], "Arching ribbons spill over the sides of its pot."],
-    ["heart", "Heartleaf", "heart", "#3a784a", ["Emerald", "Copper Heart", "Lime Veins", "Snow Edge"], "A climber with soft, heart-shaped foliage."],
-    ["boston", "Boston Fern", "fern", "#658436", ["Featherleaf", "Moss Lace"], "A cloud of finely divided fronds."],
-    ["polka", "Polka Dot Plant", "bush", "#9f5769", ["Blush", "White Confetti", "Berry Freckle", "Ruby Dots"], "Freckled leaves with a painterly finish."],
-    ["velvet", "Velvet Alocasia", "shield", "#355857", ["Green Velvet", "Silver Vein", "Cinder", "Ghost Shield"], "Dark, velvety shields catch the light along their veins."],
-    ["purple", "Purple Oxalis", "flower", "#805177", ["Plum", "Wine Star", "Pink Flutter", "Frost Plum", "Copper Wing"], "Triangular leaves fold into delicate clusters."],
-    ["snake", "Moonshine Snake Plant", "spear", "#809c73", ["Moonshine", "Jade Edge", "Butter Stripe"], "Upright leaves show a soft, silvery sheen."],
-    ["prayer", "Prayer Plant", "heart", "#4f754e", ["Red Vein", "Lemon Line", "Night Stripe", "Painted Pearl"], "Patterned foliage lifts toward evening."],
-    ["pink", "Pink Princess", "shield", "#385e43", ["Rose Sector", "Dark Cherry", "Bubblegum", "Marble Rose", "Cream Flame"], "Rose-colored patches break up its deep green leaves."],
-    ["jewel", "Jewel Orchid", "flower", "#68466a", ["Copper Net", "Gold Rain", "Ivory Vein", "Ruby Thread", "Obsidian", "Luminous Pink"], "Fine metallic lines trace the leaves beneath its blooms."],
-    ["blue", "Blue Star Fern", "fern", "#45847a", ["Blue Star", "Mist Blue", "Jade Wave", "Sea Glass", "Silver Frond"], "Sculptural fronds carry a blue-green cast."],
-    ["cotton", "Cotton Candy Caladium", "heart", "#b36178", ["Candy Floss", "Raspberry", "Pearl Heart", "Blush Vein", "White Flame", "Peach Halo"], "Color gathers along the broad leaves and branching veins."],
-    ["string", "String of Rubies", "trailing", "#8f5369", ["Wine Beads", "Green Flame", "Rose Dew", "Garnet", "Plum Splash"], "Long trails of ruby-tinted leaves tumble from the pot."],
-    ["constellation", "Thai Constellation", "monstera", "#4d783f", ["Star Map", "Milky Way", "Cream Sector", "Lime Galaxy", "White Nova", "Mint Orbit", "Sunspot", "Silver Comet"], "Split leaves carry constellations of pale speckles."],
-    ["spirit", "Spirit Philodendron", "shield", "#8eae78", ["Mint Ghost", "Candlelight", "Silver Flame", "Moon Jade", "Pink Apparition", "Frost"], "New growth unfurls in unusually pale shades."],
-    ["black", "Black Bat Flower", "flower", "#533a59", ["Ink Wing", "Violet Night", "Red Velvet", "White Bat", "Silver Whisker", "Black Pearl", "Ember"], "Spidery blooms hover above broad tropical leaves."],
-    ["glass", "Glass Succulent", "succulent", "#75a899", ["Clear Mint", "Opal", "Rose Quartz", "Amber Glass", "Sea Crystal", "Blue Chalcedony", "Frosted Jade", "Lavender Ice"], "Translucent tips glow like polished stones."],
-    ["fire", "Firefly Fern", "fern", "#829143", ["Golden Lantern", "Lime Spark", "Copper Glow", "Ivory Ember", "Mint Lantern", "Rose Flicker", "Sun Shower"], "Bright new fronds seem to catch stray rays of light."],
-  ].map(([id, name, shape, color, phenotypes, note], i) => ({
-    id, name, shape, color, phenotypes, note, tier: Math.floor(i / 5), position: i % 5,
-    price: MARKET_PRICES[Math.floor(i / 5)][i % 5],
-  }));
+  const GROUPS = [
+    [
+      ["golden", "Golden Pothos", "trailing", "#55763e", ["Golden Speckle", "Jade", "Lemon Splash"], "A forgiving trailing vine with golden flecks."],
+      ["jade", "Jade Plant", "succulent", "#66864e", ["Classic Green", "Crimson Edge"], "Rounded leaves stack up like little green coins."],
+      ["spider", "Spider Plant", "grass", "#6a9046", ["Green Stripe", "Ivory Ribbon", "Lime Twist"], "Arching ribbons spill over the sides of its pot."],
+      ["heart", "Heartleaf", "heart", "#3a784a", ["Emerald", "Copper Heart", "Lime Veins", "Snow Edge"], "A climber with soft, heart-shaped foliage."],
+      ["boston", "Boston Fern", "fern", "#658436", ["Featherleaf", "Moss Lace"], "A cloud of finely divided fronds."],
+      ["peperomia", "Coin Peperomia", "succulent", "#477e6b", ["Rain Coin", "Red Rim", "Lime Coin"], "Plump round leaves hold a glossy sheen."],
+      ["wax", "Wax Begonia", "bush", "#856459", ["Bronze Leaf", "Green Wax", "Rose Wash"], "Small bronze leaves cluster into a tidy mound."],
+      ["swedish", "Swedish Ivy", "trailing", "#3e8156", ["Bright Green", "White Ruffle", "Copper Margin", "Lemon Ruffle"], "Rounded scalloped leaves spill over the pot."],
+    ],
+    [
+      ["polka", "Polka Dot Plant", "bush", "#9f5769", ["Blush", "White Confetti", "Berry Freckle", "Ruby Dots"], "Freckled leaves with a painterly finish."],
+      ["velvet", "Velvet Alocasia", "shield", "#355857", ["Green Velvet", "Silver Vein", "Cinder", "Ghost Shield"], "Dark, velvety shields catch the light along their veins."],
+      ["purple", "Purple Oxalis", "flower", "#805177", ["Plum", "Wine Star", "Pink Flutter", "Frost Plum", "Copper Wing"], "Triangular leaves fold into delicate clusters."],
+      ["snake", "Moonshine Snake Plant", "spear", "#809c73", ["Moonshine", "Jade Edge", "Butter Stripe"], "Upright leaves show a soft, silvery sheen."],
+      ["prayer", "Prayer Plant", "heart", "#4f754e", ["Red Vein", "Lemon Line", "Night Stripe", "Painted Pearl"], "Patterned foliage lifts toward evening."],
+      ["nerve", "Nerve Plant", "bush", "#66846a", ["White Net", "Pink Net", "Crimson Net", "Lime Thread", "Snow Net"], "A fine mesh of bright veins covers the foliage."],
+      ["rex", "Rex Begonia", "shield", "#765466", ["Silver Spiral", "Burgundy Swirl", "Mint Rim", "Rose Ring", "Mosaic"], "Broad leaves carry rings of purple and silver."],
+      ["ponytail", "Ponytail Palm", "grass", "#718c56", ["Long Curl", "Gold Ribbon", "Seafoam", "Silver Curl"], "Long, narrow leaves arch out from the center."],
+    ],
+    [
+      ["pink", "Pink Princess", "shield", "#385e43", ["Rose Sector", "Dark Cherry", "Bubblegum", "Marble Rose", "Cream Flame"], "Rose-colored patches break up its deep green leaves."],
+      ["jewel", "Jewel Orchid", "flower", "#68466a", ["Copper Net", "Gold Rain", "Ivory Vein", "Ruby Thread", "Obsidian", "Luminous Pink"], "Fine metallic lines trace the leaves beneath its blooms."],
+      ["blue", "Blue Star Fern", "fern", "#45847a", ["Blue Star", "Mist Blue", "Jade Wave", "Sea Glass", "Silver Frond"], "Sculptural fronds carry a blue-green cast."],
+      ["cotton", "Cotton Candy Caladium", "heart", "#b36178", ["Candy Floss", "Raspberry", "Pearl Heart", "Blush Vein", "White Flame", "Peach Halo"], "Color gathers along the broad leaves and branching veins."],
+      ["string", "String of Rubies", "trailing", "#8f5369", ["Wine Beads", "Green Flame", "Rose Dew", "Garnet", "Plum Splash"], "Long trails of ruby-tinted leaves tumble from the pot."],
+      ["satin", "Silver Satin Pothos", "trailing", "#729789", ["Silver Splash", "Moon Stripe", "Sea Glass", "Fine Dust", "Pearl Rim", "Ice Patch"], "Pale satin flecks shine against trailing green leaves."],
+      ["strawberry", "Strawberry Begonia", "succulent", "#936870", ["Ruby Runner", "Blush Ring", "Ivory Edge", "Velvet Red", "Mint Fan"], "Rosy runners carry small rounded leaves."],
+      ["painted", "Painted Lady Philodendron", "shield", "#88a452", ["Watercolor", "Lime Speckle", "Pink Stem", "Cream Splash", "Olive Brush", "Golden Brush"], "Yellow-green strokes mark its pointed leaves."],
+    ],
+    [
+      ["constellation", "Thai Constellation", "monstera", "#4d783f", ["Star Map", "Milky Way", "Cream Sector", "Lime Galaxy", "White Nova", "Mint Orbit", "Sunspot", "Silver Comet"], "Split leaves carry constellations of pale speckles."],
+      ["spirit", "Spirit Philodendron", "shield", "#8eae78", ["Mint Ghost", "Candlelight", "Silver Flame", "Moon Jade", "Pink Apparition", "Frost"], "New growth unfurls in unusually pale shades."],
+      ["black", "Black Bat Flower", "flower", "#533a59", ["Ink Wing", "Violet Night", "Red Velvet", "White Bat", "Silver Whisker", "Black Pearl", "Ember"], "Spidery blooms hover above broad tropical leaves."],
+      ["glass", "Glass Succulent", "succulent", "#75a899", ["Clear Mint", "Opal", "Rose Quartz", "Amber Glass", "Sea Crystal", "Blue Chalcedony", "Frosted Jade", "Lavender Ice"], "Translucent tips glow like polished stones."],
+      ["fire", "Firefly Fern", "fern", "#829143", ["Golden Lantern", "Lime Spark", "Copper Glow", "Ivory Ember", "Mint Lantern", "Rose Flicker", "Sun Shower"], "Bright new fronds seem to catch stray rays of light."],
+      ["queen", "Queen Anthurium", "shield", "#304f42", ["Silver Crown", "Night Vein", "Gold Thread", "Ivory Crown", "Black Velvet", "Pale Jade", "Rose Vein"], "Long velvety leaves carry a central vein like silver thread."],
+      ["echeveria", "Ghost Echeveria", "succulent", "#a0a6a4", ["Moon Dust", "Lavender Frost", "Mint Glass", "Rose Tips", "Pearl Mist", "Ice Blue", "Sunset Rim"], "Powdery leaves form a pale, tightly layered rosette."],
+      ["aurora", "Aurora Tradescantia", "trailing", "#785783", ["Borealis", "Pink Sky", "Violet Dawn", "Silver Ribbon", "Lime Haze", "Dusk Stripe", "Rose Aurora", "White Night"], "Stripes of lilac and green wind down its stems."],
+    ],
+  ].map((entries, tier) => entries.map(([id, name, shape, color, phenotypes, note], position) => ({
+    id, name, shape, color, phenotypes, note, tier, position, price: MARKET_PRICES[tier][position],
+  })));
+  const CATALOG = GROUPS.flat();
   const SPECIES = Object.fromEntries(CATALOG.map(species => [species.id, species]));
   const SUPPLIES = {
     fertilizer: { name: "Fertilizer", icon: "fertilizer", cost: 12, quantity: 3, description: "3 doses that support healthy growth." },
@@ -130,6 +155,39 @@ window.Garden = (() => {
     };
   }
 
+  function dryingRate(plant, now, location = plant.location) {
+    const species = SPECIES[plant.species];
+    const shapeFactor = species.shape === "succulent" ? .57 : species.shape === "fern" ? 1.21 : 1;
+    return [1.35, 1.85, 2.55, 3.35][species.tier] * phaseAt(now).evaporation * shapeFactor * [.84, 1, 1.17][location];
+  }
+
+  function movePlant(plant, location, now) {
+    if (!LOCATIONS[location] || plant.location === location) return false;
+    const correctLight = careNeeds(plant, now).light === location;
+    plant.location = location;
+    plant.health = clamp(plant.health + (correctLight ? 10 : -10), 10);
+    return true;
+  }
+
+  function waterRange(plant, now) {
+    const { dry, wet } = careNeeds(plant, now);
+    return { min: dry + 10, max: wet - 8 };
+  }
+
+  function waterPlant(plant, amount, now, manual = false) {
+    if (amount <= 0 || plant.water >= 100) return;
+    const previous = plant.water;
+    const { dry, wet } = careNeeds(plant, now);
+    plant.water = clamp(previous + amount);
+    if (plant.water > wet) {
+      plant.health = clamp(plant.health - Math.min(10, 3 + (plant.water - wet) * .35), 10);
+    } else if (previous < dry && plant.water >= dry) {
+      const range = waterRange(plant, now);
+      const bonus = manual && plant.water >= range.min && plant.water <= range.max ? 3 : 0;
+      plant.health = clamp(plant.health + 17 + bonus);
+    }
+  }
+
   function advance(state, now) {
     if (now <= state.updatedAt) return;
     let cursor = Math.max(state.updatedAt, now - 7 * 24 * HOUR);
@@ -145,8 +203,7 @@ window.Garden = (() => {
         const species = SPECIES[plant.species];
         const tier = species.tier;
         const needs = careNeeds(plant, cursor);
-        const waterLoss = [1.35, 1.85, 2.55, 3.35][tier] * phase.evaporation *
-          (species.shape === "succulent" ? .57 : species.shape === "fern" ? 1.21 : 1) * (plant.location === 2 ? 1.17 : 1);
+        const waterLoss = dryingRate(plant, cursor);
         const water = clamp(plant.water - waterLoss * hours / 2);
         const humidityLoss = [.6, 1.35, 2.3, 3.4][tier] * phase.evaporation;
         const humidity = clamp(plant.humidity - humidityLoss * hours / 2);
@@ -202,7 +259,8 @@ window.Garden = (() => {
     const cadence = [0, 2, 4, 8][species.tier];
     const offset = [0, 0, 1, 3][species.tier];
     const rotation = Math.floor(window / cadence);
-    if (window % cadence !== offset || rotation % 5 !== species.position) return 0;
+    const group = GROUPS[species.tier];
+    if (window % cadence !== offset || rotation % group.length !== species.position) return 0;
     const purchases = state.marketPurchases;
     const used = purchases.window === window ? (purchases.quantities[species.id] || 0) : 0;
     return Math.max(0, (species.tier === 1 ? 2 : 1) - used);
@@ -287,7 +345,11 @@ window.Garden = (() => {
     const y = SPECIES[b.species];
     if (x.id === y.id || x.tier !== y.tier || x.tier === 3) return null;
     const [low, high] = [x.position, y.position].sort((l, r) => l - r);
-    return CATALOG[(x.tier + 1) * 5 + ((low + 2 * high - 1) % 5)];
+    const group = GROUPS[x.tier + 1];
+    const variety = low + 2 * high - 1;
+    const position = high < CLASSIC_GROUP_SIZE ? variety % CLASSIC_GROUP_SIZE :
+      CLASSIC_GROUP_SIZE + variety % (group.length - CLASSIC_GROUP_SIZE);
+    return group[position];
   }
 
   function breed(state, a, b, now, random = Math.random) {
@@ -323,17 +385,19 @@ window.Garden = (() => {
     return plant;
   }
 
+  const discoveredCount = state => new Set(state.discovered.map(key => key.split(":")[0])).size;
   const GOALS = [
     { name: "A second chance", description: "Water, move, and prune your pothos to reach 72% health.", reward: 14, test: s => s.history.recovered },
     { name: "Make room for company", description: "Buy a plant from the market.", reward: 8, test: s => s.history.bought },
     { name: "New roots", description: "Pot your first seedling in the breeding room.", reward: 18, test: s => s.history.harvested },
     { name: "A rare discovery", description: "Breed a Rare or Legendary plant.", reward: 40, test: s => s.history.rareCross },
-    { name: "The complete collection", description: "Discover all 20 plant species.", reward: 150, test: s => new Set(s.discovered.map(key => key.split(":")[0])).size === CATALOG.length },
+    { name: "An established collection", description: "Discover 20 plant species.", reward: 150, test: s => discoveredCount(s) >= CLASSIC_SPECIES_COUNT },
+    { name: "The complete collection", description: "Discover all " + CATALOG.length + " plant species.", reward: 200, test: s => discoveredCount(s) === CATALOG.length },
   ];
 
   return {
     MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, CATALOG, SPECIES, SUPPLIES, GOALS, clamp,
-    phaseAt, careNeeds, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
+    phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
     speciesUnlocked, marketStock, nextRestock, buyPlant, rotateOrders, nextOrderDay, orderMatches,
     toggleOrderPin, deliverOrder, parentProblem, crossPreview, breed, potSeed,
   };

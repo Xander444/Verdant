@@ -109,6 +109,21 @@ window.PlantArt = (() => {
     const foliage = mix(mix(base, variant, variantTint), ink.dry, wilt * .46);
     const colors = [foliage, mix(foliage, ink.light, .4 + wilt * .11), mix(foliage, ink.dark, .56), variant];
     const shape = species.shape;
+    if (species.id === "echeveria") {
+      const rings = [[0, 11, 79], [1.5, 9, 59], [2.2, 7, 42], [2.4, 5, 28]];
+      for (const [turn, leaves, length] of rings) {
+        const angles = Array.from({ length: leaves }, (_, i) => turn + i / leaves * Math.PI * 2);
+        angles.sort((a, b) => Math.cos(b) - Math.cos(a));
+        for (const angle of angles) {
+          const x = Math.sin(angle);
+          const y = Math.cos(angle);
+          const tilt = Math.atan2(x, y * .54);
+          leaf(ctx, x * 7, -14 - y * 7, tilt, length * (1 - Math.abs(y) * .36), length * .24,
+            "succulent", colors, random, pale);
+        }
+      }
+      return;
+    }
     const number = Math.round(8 + plant.size * .085);
     const stems = Array.from({ length: number }, (_, i) => {
       const along = (i / Math.max(1, number - 1)) * 2 - 1;

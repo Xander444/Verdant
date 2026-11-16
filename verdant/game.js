@@ -25,6 +25,8 @@
     coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10m2-8h-3a1.5 1.5 0 1 0 0 3h2a1.5 1.5 0 1 1 0 3h-3"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     drop: '<path d="M12 3c3 4 6 7 6 11a6 6 0 1 1-12 0c0-4 3-7 6-11Z"/><path d="M9 14c0 2 1 3 3 3"/>',
+    can: '<path d="M7 12h10v6a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2Zm10 3 4-5-2-1-2 3M7 13a3 3 0 1 0 0 5m2-6V9a3 3 0 0 1 6 0v3m6-7v.01M18 6v.01"/>',
+    lamp: '<path d="M12 3v3M8 6h8l4 7H4Zm-4 10-1 2m5-2v4m8-4v4m4-4 1 2"/>',
     heart: '<path d="M12 20 4 12a5 5 0 0 1 8-6 5 5 0 0 1 8 6Z"/>',
     prune: '<circle cx="5.5" cy="5.5" r="2.5"/><circle cx="5.5" cy="18.5" r="2.5"/><path d="m7.5 7.5 13 13m-13-4 13-13m-8 8L10 14"/>',
     fertilizer: '<path d="M8 3h8m-7 0v6l-5 8a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-8V3M7 14h10m-6 3h.01"/>',
@@ -48,6 +50,8 @@
   const reward = n => `${icon("coin")} <span>+${numberFormat.format(n)}</span>`;
   const percent = value => Math.floor(value + .000001);
   const countSpecies = () => new Set(state.discovered.map(key => key.split(":")[0])).size;
+  const stationIcons = ["leaf", "sun", "lamp"];
+  const stationNotes = ["Soft light, slower drying", "Light follows the day", "Steady light, faster drying"];
   const totalPhenotypes = CATALOG.reduce((sum, species) => sum + species.phenotypes.length, 0);
   const activePlant = () => state.plants.find(plant => plant.id === state.selected) || state.plants[0];
   const canRescue = () => !state.plants.length && G.freeSlots(state) > 0 && state.coins < SPECIES.golden.price;
@@ -62,6 +66,8 @@
   let lastSaved;
   let storageWorks = true;
   let toastTimer;
+  let draggedPlant;
+  let pouring;
   let view = { marketFilter: "all", guideFilter: "all", parentA: "", parentB: "" };
 
   function syncSave() {
@@ -116,6 +122,8 @@
     if (minutes < 60) return `${minutes}m`;
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   }
+
+  const dryingLabel = (plant, now, spot) => `Loses ${G.dryingRate(plant, now, spot).toFixed(1)}% moisture/hr`;
 
   const countdown = until => `<span data-countdown="${until}"></span>`;
 
@@ -189,7 +197,8 @@
           ${species.tier >= 1 ? metric("Nutrients", "fertilizer", `${percent(plant.nutrients)}%`, plant.nutrients < needs.food ? "Needs fertilizer" : "Nutrients are good", plant.nutrients < needs.food ? "warning" : "", plant.nutrients) : ""}
         </div>
         <div class="care-actions">
-          ${button("Water", "water", { symbol: "drop", className: "primary", disabled: !allowed.water, extra: 'title="Water dry soil"' })}
+          ${button("Watering can", "watering-can", { symbol: "can", className: "primary" })}
+          ${button("Quick water", "water", { symbol: "drop", disabled: !allowed.water, extra: 'title="Water dry soil"' })}
           ${button("Move", "move", { symbol: "sun", extra: 'title="Choose where this plant gets its light"' })}
           ${button("Prune", "prune", { symbol: "prune", disabled: !allowed.prune, extra: `title="${allowed.timers.prune > now ? `Ready in ${remaining(allowed.timers.prune, now)}` : "Trim damaged leaves and improve the plant's shape"}"` })}
           ${button(`Feed <small>${state.inventory.fertilizer}</small>`, "feed", { symbol: "fertilizer", disabled: !allowed.feed, extra: `title="${allowed.timers.feed > now ? `Ready in ${remaining(allowed.timers.feed, now)}` : "Use one dose of fertilizer"}"` })}
@@ -235,18 +244,37 @@
 
   function shelfView(plant, now) {
     const slots = G.freeSlots(state);
-    const plants = state.plants.map(item => {
+    const best = plant && G.careNeeds(plant, now).light;
+    const plantTile = item => {
       const species = SPECIES[item.species];
-      return `<button class="shelf-plant ${item === plant ? "selected" : ""}" type="button" data-action="select" data-id="${item.id}" aria-pressed="${item === plant}">
+      return `<button class="shelf-plant ${item === plant ? "selected" : ""}" type="button" draggable="true" data-action="select" data-id="${item.id}" aria-pressed="${item === plant}">
         <span class="shelf-preview">${canvas(species, item)}${item.onDisplay ? `<span class="shelf-display" title="On display">${icon("display")}</span>` : ""}</span>
         <span><strong>${species.name}</strong><small>${species.phenotypes[item.pheno]}</small></span>
       </button>`;
+    };
+    const stations = LOCATIONS.map((name, spot) => {
+      const residents = state.plants.filter(item => item.location === spot);
+      const current = plant?.location === spot;
+      const recommended = best === spot;
+      return `<article class="paper station station-${spot}" data-station="${spot}">
+        <div class="station-heading"><span class="tile-icon">${icon(stationIcons[spot])}</span>
+          <div><h3>${name}</h3><p>${stationNotes[spot]}</p></div>
+          ${recommended ? '<span class="count-pill station-recommended">Best light now</span>' : ""}</div>
+        <div class="station-pots">${residents.length ? residents.map(plantTile).join("") :
+          `<div class="station-empty">${icon("sprout")} Empty spot</div>`}</div>
+        ${plant ? `<div class="station-footer"><small title="Current soil drying rate">${icon("drop")} ${dryingLabel(plant, now, spot)}</small>
+          ${button(current ? "Here now" : "Move here", "station-place", { className: "compact", disabled: current,
+            extra: `data-id="${spot}" data-plant="${plant.id}" aria-label="${current ? `${SPECIES[plant.species].name} is here` : `Move ${SPECIES[plant.species].name} to ${name.toLowerCase()}`}"`,
+          })}</div>` : ""}
+      </article>`;
     }).join("");
     const seeds = state.seeds.map(seed => `<a class="shelf-plant seed-slot" href="#breeding"><span class="shelf-placeholder">${icon("sprout")}</span><span><strong>${seed.readyAt <= now ? "Ready to pot" : "Seed tray"}</strong><small>Reserved space</small></span></a>`).join("");
-    const empty = slots > 0 ? `<a class="shelf-plant empty-slot" href="#market"><span class="shelf-placeholder">${icon("plus")}</span><span><strong>Empty shelf</strong><small>${slots} open ${slots === 1 ? "space" : "spaces"}</small></span></a>` : "";
+    const empty = slots > 0 ? `<a class="shelf-plant empty-slot" href="#market"><span class="shelf-placeholder">${icon("plus")}</span><span><strong>Add a plant</strong><small>${slots} open ${slots === 1 ? "space" : "spaces"}</small></span></a>` : "";
     return `<section class="shelf-section" aria-labelledby="shelf-title">
       <div class="section-heading"><div class="heading-with-count"><h2 id="shelf-title">Your shelves</h2><span class="count-pill">${state.capacity - slots} / ${state.capacity} spaces</span></div><a class="text-link" href="#market">${icon("plus")} Expand shelves</a></div>
-      <div class="shelf-grid">${plants}${seeds}${empty}</div>
+      ${plant ? `<p class="section-description shelf-hint"><strong>${SPECIES[plant.species].name} selected.</strong> Drag a pot between shelves, or select a pot and choose Move here.</p>` : ""}
+      <div class="station-grid">${stations}</div>
+      ${seeds || empty ? `<div class="shelf-grid shelf-extras">${seeds}${empty}</div>` : ""}
     </section>`;
   }
 
@@ -501,9 +529,117 @@
     const phase = G.phaseAt(now).name.toLowerCase();
     openDialog("Move plant", `<p>Choose a spot for the ${phase}. Light needs change over the day.</p>
       <div class="move-options">${LOCATIONS.map((spot, i) => button(`${spot}${i === best ? " <small>Recommended now</small>" : ""}${i === plant.location ? " <small>Current</small>" : ""}`, "place", {
-        symbol: ["moon", "sun", "sun"][i], extra: `data-id="${i}" data-plant="${plant.id}"`, disabled: i === plant.location,
+        symbol: stationIcons[i], extra: `data-id="${i}" data-plant="${plant.id}"`, disabled: i === plant.location,
         className: i === best ? "recommended" : "",
       })).join("")}</div>`);
+  }
+
+  function showWatering(plant, now) {
+    const species = SPECIES[plant.species];
+    const range = G.waterRange(plant, now);
+    const { wet } = G.careNeeds(plant, now);
+    openDialog(`Water ${species.name}`, `<div class="water-panel" data-water-plant="${plant.id}"
+        data-min="${range.min}" data-max="${range.max}" data-wet="${wet}">
+      <div class="water-scene">${canvas(species, plant)}<span class="water-can" aria-hidden="true">${icon("can")}</span><i class="water-stream" aria-hidden="true"></i></div>
+      <p>Hold to pour. Release when the moisture reaches the green range.</p>
+      <div class="water-readout"><strong>Soil moisture</strong><strong data-water-level></strong></div>
+      <div class="water-gauge" role="meter" aria-label="Soil moisture" aria-valuemin="0" aria-valuemax="100"
+        style="--band-start:${range.min}%;--band-width:${range.max - range.min}%">
+        <span class="water-band"></span><span class="water-marker"></span>
+      </div>
+      <div class="water-readout"><small>Target ${range.min}–${range.max}%</small><small data-water-condition></small></div>
+      <div class="pour-actions">
+        <button class="button primary" type="button" data-pour-hold>${icon("can")} Hold to pour</button>
+        <button class="button" type="button" data-pour-toggle>Start pouring</button>
+      </div>
+      <p class="pour-result" data-pour-result role="status"></p>
+    </div>`);
+    const panel = dialog.querySelector(".water-panel");
+    updateWaterPanel(panel, plant.water);
+  }
+
+  function updateWaterPanel(panel, level) {
+    const value = Math.floor(level);
+    const { min, max, wet } = panel.dataset;
+    const condition = level > Number(wet) ? "Too wet" : level > Number(max) ? "Above target" :
+      level >= Number(min) ? "In target range" : "Below target";
+    panel.classList.toggle("too-wet", level > Number(wet));
+    const meter = panel.querySelector(".water-gauge");
+    meter.style.setProperty("--level", `${level}%`);
+    meter.setAttribute("aria-valuenow", String(value));
+    meter.setAttribute("aria-valuetext", `${value}% · ${condition}`);
+    panel.querySelector("[data-water-level]").textContent = `${value}%`;
+    panel.querySelector("[data-water-condition]").textContent = condition;
+
+    if (!pouring) {
+      for (const element of panel.querySelectorAll("[data-pour-hold], [data-pour-toggle]")) element.disabled = level >= 100;
+    }
+  }
+
+  function pouredAmount(session, current) {
+    return Math.floor(Math.max(0, current - session.started) * .026);
+  }
+
+  function beginPour(panel, control) {
+    if (pouring) return false;
+    syncSave();
+    advanceTo(Date.now());
+    const plant = state.plants.find(item => item.id === Number(panel.dataset.waterPlant));
+    if (!plant) {
+      dialog.close();
+      notify("This plant is no longer on your shelves.");
+      return false;
+    }
+    if (plant.water >= 100) return false;
+
+    const session = { panel, control, plantId: plant.id, baseline: plant.water, started: performance.now(), frame: 0 };
+    pouring = session;
+    panel.classList.add("is-pouring");
+    panel.querySelector("[data-pour-toggle]").textContent = "Stop pouring";
+    panel.querySelector("[data-pour-result]").textContent = "";
+    function tick(current) {
+      if (pouring !== session) return;
+      const level = G.clamp(session.baseline + pouredAmount(session, current));
+      updateWaterPanel(panel, level);
+      if (level < 100) session.frame = requestAnimationFrame(tick);
+    }
+    session.frame = requestAnimationFrame(tick);
+    return true;
+  }
+
+  function endPour(apply) {
+    const session = pouring;
+    if (!session) return;
+    pouring = undefined;
+    cancelAnimationFrame(session.frame);
+    const { panel } = session;
+    panel.classList.remove("is-pouring");
+    panel.querySelector("[data-pour-toggle]").textContent = "Start pouring";
+    if (!apply) {
+      updateWaterPanel(panel, session.baseline);
+      return;
+    }
+
+    const amount = pouredAmount(session, performance.now());
+    syncSave();
+    const now = Date.now();
+    advanceTo(now);
+    const plant = state.plants.find(item => item.id === session.plantId);
+    if (!plant) {
+      dialog.close();
+      render();
+      notify("This plant is no longer on your shelves.");
+      return;
+    }
+    G.waterPlant(plant, amount, now, true);
+    trackRecovery();
+    save();
+    render();
+    updateWaterPanel(panel, plant.water);
+    const { min, max } = G.waterRange(plant, now);
+    panel.querySelector("[data-pour-result]").textContent = amount < 1 ? "Hold a little longer to pour." :
+      plant.water > G.careNeeds(plant, now).wet ? "The soil is soaked. Give it time to dry." :
+      plant.water >= min && plant.water <= max ? "Watered into the target range." : `Watered to ${percent(plant.water)}%.`;
   }
 
   function chooseDelivery(order) {
@@ -525,11 +661,11 @@
     const needs = G.careNeeds(plant, now);
     const increase = (key, amount) => { plant[key] = G.clamp(plant[key] + amount); };
     switch (action) {
-      case "water":
-        if (plant.water < needs.dry) increase("health", 17);
+      case "water": {
         const amount = SPECIES[plant.species].shape === "succulent" ? 33 : 43;
-        increase("water", Math.min(amount, needs.wet - 4 - plant.water));
+        G.waterPlant(plant, Math.min(amount, needs.wet - 4 - plant.water), now);
         return "Plant watered.";
+      }
       case "prune":
         increase("health", plant.health < 72 ? 10 : 3);
         plant.quality = Math.min(5, plant.quality + 1);
@@ -556,8 +692,8 @@
     }
   }
 
-  function perform(action, target, now, plantId) {
-    const id = target.dataset.id;
+  function perform(action, data, now, plantId) {
+    const { id } = data;
     const plant = state.plants.find(item => item.id === plantId);
     const species = SPECIES[id];
     switch (action) {
@@ -573,17 +709,18 @@
       case "move":
         if (plant) showMove(plant, now);
         return;
-      case "place": {
-        const moved = state.plants.find(item => item.id === Number(target.dataset.plant));
+      case "place":
+      case "station-place": {
+        const moved = state.plants.find(item => item.id === Number(data.plant));
         const spot = Number(id);
-        dialog.close();
-        if (!moved || !LOCATIONS[spot] || moved.location === spot) return;
-        const need = G.careNeeds(moved, now).light;
-        moved.location = spot;
-        if (spot === need) moved.health = G.clamp(moved.health + 10);
-        else moved.health = G.clamp(moved.health - 10, 10);
-        return `Plant moved to ${LOCATIONS[spot].toLowerCase()}.`;
+        if (action === "place") dialog.close();
+        if (!moved || !G.movePlant(moved, spot, now)) return;
+        state.selected = moved.id;
+        return `${SPECIES[moved.species].name} moved to ${LOCATIONS[spot].toLowerCase()}.`;
       }
+      case "watering-can":
+        if (plant) showWatering(plant, now);
+        return;
       case "water":
       case "prune":
       case "feed":
@@ -655,7 +792,7 @@
           chooseDelivery(order);
           return;
         }
-        const delivered = state.plants.find(item => item.id === Number(target.dataset.plant));
+        const delivered = state.plants.find(item => item.id === Number(data.plant));
         const payout = G.deliverOrder(state, order, delivered);
         dialog.close();
         return payout ? `Order delivered. You earned ${payout} coins.` : "This plant is unavailable for delivery.";
@@ -695,19 +832,97 @@
     }
   }
 
-  document.addEventListener("click", event => {
-    const target = event.target.closest("button[data-action]");
-    if (!target || target.disabled) return;
+  function runAction(action, data) {
     const plantId = activePlant()?.id;
     syncSave();
     const now = Date.now();
     advanceTo(now);
-    const message = perform(target.dataset.action, target, now, plantId);
+    const message = perform(action, data, now, plantId);
     trackRecovery();
     save();
     render();
     if (message) notify(message);
+  }
+
+  document.addEventListener("click", event => {
+    const target = event.target.closest("button[data-action]");
+    if (target && !target.disabled) runAction(target.dataset.action, target.dataset);
   });
+
+  dialog.addEventListener("pointerdown", event => {
+    const hold = event.target.closest("[data-pour-hold]");
+    if (!hold || hold.disabled || event.button !== 0) return;
+    if (beginPour(hold.closest(".water-panel"), event.pointerId)) hold.setPointerCapture(event.pointerId);
+  });
+  dialog.addEventListener("pointerup", event => {
+    if (pouring?.control === event.pointerId) endPour(true);
+  });
+  for (const type of ["pointercancel", "lostpointercapture"]) {
+    dialog.addEventListener(type, event => {
+      if (pouring?.control === event.pointerId) endPour(false);
+    });
+  }
+  dialog.addEventListener("keydown", event => {
+    const hold = event.target.closest("[data-pour-hold]");
+    if (!hold || hold.disabled || ![" ", "Enter"].includes(event.key)) return;
+    event.preventDefault();
+    if (!event.repeat) beginPour(hold.closest(".water-panel"), event.key);
+  });
+  window.addEventListener("keyup", event => {
+    if (pouring?.control !== event.key) return;
+    event.preventDefault();
+    endPour(true);
+  });
+  dialog.addEventListener("click", event => {
+    const toggle = event.target.closest("[data-pour-toggle]");
+    if (!toggle || toggle.disabled) return;
+    if (pouring) endPour(true);
+    else beginPour(toggle.closest(".water-panel"), "toggle");
+  });
+  dialog.addEventListener("close", () => endPour(false));
+  window.addEventListener("blur", () => endPour(false));
+
+  function clearDrag() {
+    if (!draggedPlant) return;
+    draggedPlant.source.classList.remove("is-dragged");
+    draggedPlant.station?.classList.remove("drop-target");
+    draggedPlant = undefined;
+  }
+
+  app.addEventListener("dragstart", event => {
+    const tile = event.target.closest(".station-pots [draggable]");
+    if (!tile || !event.dataTransfer) return;
+    const id = tile.dataset.id;
+    draggedPlant = { id, source: tile };
+    event.dataTransfer.setData("text/plain", id);
+    event.dataTransfer.effectAllowed = "move";
+    tile.classList.add("is-dragged");
+  });
+  app.addEventListener("dragover", event => {
+    const station = event.target.closest("[data-station]");
+    if (!draggedPlant || !station) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (draggedPlant.station === station) return;
+    draggedPlant.station?.classList.remove("drop-target");
+    draggedPlant.station = station;
+    station.classList.add("drop-target");
+  });
+  app.addEventListener("dragleave", event => {
+    const station = event.target.closest("[data-station]");
+    if (!station || draggedPlant?.station !== station || station.contains(event.relatedTarget)) return;
+    station.classList.remove("drop-target");
+    draggedPlant.station = undefined;
+  });
+  app.addEventListener("drop", event => {
+    const station = event.target.closest("[data-station]");
+    if (!draggedPlant || !station) return;
+    event.preventDefault();
+    const plant = draggedPlant.id;
+    clearDrag();
+    runAction("station-place", { id: station.dataset.station, plant });
+  });
+  app.addEventListener("dragend", clearDrag);
 
   app.addEventListener("change", event => {
     const { filter } = event.target.dataset;
@@ -718,6 +933,7 @@
 
   window.addEventListener("hashchange", () => {
     if (dialog.open) dialog.close();
+    clearDrag();
     syncSave();
     advanceTo(Date.now());
     render();
@@ -727,7 +943,7 @@
   function refresh() {
     syncSave();
     advanceTo(Date.now());
-    if (!dialog.open) render();
+    if (!dialog.open && !draggedPlant) render();
   }
 
   window.addEventListener("storage", event => { if (event.key === STORE) refresh(); });
