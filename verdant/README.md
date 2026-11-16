@@ -17,7 +17,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - Open **Prune**, snip each marked leaf, and choose **Finish pruning** to keep more growth. **Quick prune** takes one step. Both improve the plant's shape and share the same cooldown.
 - On a woody plant, open **Train branches** to select and bend a branch. Save the shape to keep the new silhouette.
 - Buy a second Common plant. Feed both with your starting fertilizer to bring them up to breeding size. You need an open shelf space, five coins, and two plants with at least 72% health and 42% growth to start a cross.
-- Pair two different plants of the same rarity for a chance at the next rarity. The Breeding Room shows the odds, and potting a new species reveals its name and unlocks its listings. Breed two of the same species to discover new phenotypes.
+- Pair two different plants of the same rarity for a chance at the next rarity. The Breeding Room shows the odds, and potting a new species adds it to the Field Guide. Breed two of the same species to discover new phenotypes.
 - The Breeding Journal records each potted seedling, its phenotype, and both parents. Use a saved pair again while both parents remain on your shelves and meet the breeding requirements.
 - When two plants of the same species have different phenotypes, you can favor one for the cross. The Breeding Room shows the updated odds and the journal remembers your choice.
 - Plants with at least 83% growth and 75% health can provide a cutting of the same phenotype. A cutting uses one nursery space and costs its parent 8 growth points. It roots in 20 to 75 minutes, depending on rarity.
@@ -28,7 +28,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 
 - Three orders rotate at local midnight. Grow, prune, or breed a plant to meet a request, then choose it for delivery. Delivery removes the plant from your shelves and pays its regular sale price plus the posted bonus.
 - Pin one open order to carry it into subsequent days while the other two rotate. Delivering or unpinning it frees the pin.
-- Common plants are always in stock. Discover other species through breeding before they appear in the Market or Field Guide. The Market refreshes every five minutes, with Uncommon, Rare, and Legendary plants appearing in limited quantities on different rotations. Rarer species appear less often.
+- The Market refreshes every five minutes. Golden Pothos is always available alongside four rotating Common plants. Uncommon, Rare, and Legendary plants appear in limited quantities, and rarer species appear less often. Buying a species for the first time adds it to the Field Guide.
 - The catalog contains 40 species. Pair Ficus Bonsai or Dwarf Umbrella Tree with a different Common species to start discovering the rarer tree varieties. Coin Peperomia, Wax Begonia, and Swedish Ivy also open breeding paths when paired with another Common.
 
 ## Artwork

@@ -322,8 +322,11 @@
   function market(now) {
     const spaceCost = G.shelfCost(state);
     const open = G.freeSlots(state);
-    const stock = CATALOG.filter(species => G.speciesUnlocked(state, species) &&
-      (view.marketFilter === "all" || String(species.tier) === view.marketFilter));
+    const stock = CATALOG
+      .filter(species => view.marketFilter === "all" || String(species.tier) === view.marketFilter)
+      .map(species => ({ species, quantity: G.marketStock(state, species, now) }))
+      .filter(item => item.quantity > 0)
+      .sort((a, b) => b.species.tier - a.species.tier);
     const supplies = Object.entries(SUPPLIES).map(([id, item]) => `<article class="paper supply-card">
       <span class="tile-icon">${icon(item.icon)}</span><div><h3>${item.name}</h3><p>${item.description}</p><small>${state.inventory[id]} in stock</small></div>
       ${button(coins(item.cost), "buy-supply", { extra: `data-id="${id}" aria-label="Buy ${item.name} for ${item.cost} coins"`, disabled: state.coins < item.cost })}</article>`).join("");
@@ -337,20 +340,20 @@
       <section aria-labelledby="stock-title">
         <div class="section-heading listing-heading"><div class="heading-with-count"><h2 id="stock-title">Plants for sale</h2>
           <span class="count-pill">${icon("clock")} Restock in ${countdown(G.nextRestock(state, now))}</span></div>${rarityFilter("marketFilter", view.marketFilter)}</div>
-        <p class="section-description">Common plants are always stocked. Breed and pot other species to unlock them for limited restocks.</p>
+        <p class="section-description">The selection changes every five minutes. Look for limited stock and plants you can add to your Field Guide.</p>
         ${open ? "" : `<p class="inline-note">${icon("info")} Your shelves are full. Add spaces or sell a plant to make room.</p>`}
-        ${stock.length ? `<div class="catalog-grid">${stock.map(species => {
-          const quantity = G.marketStock(state, species, now);
+        ${stock.length ? `<div class="catalog-grid">${stock.map(({ species, quantity }) => {
+          const isNew = !G.speciesUnlocked(state, species);
           return `<article class="paper catalog-card">
             <div class="catalog-art rarity-back-${species.tier}">${tierBadge(species)}${canvas(species, { size: 59 })}</div>
             <div class="catalog-copy"><h3>${species.name}</h3><p>${species.note}</p>
-            ${species.tier ? `<p class="stock-label ${quantity ? "in-stock" : ""}"><i></i>${quantity ? `${quantity} in stock` : "Out of stock"}</p>` : ""}
+            ${Number.isFinite(quantity) ? `<p class="stock-label in-stock"><i></i>${quantity} in stock${isNew ? " · New to your guide" : ""}</p>` : ""}
             ${button(`Buy <span class="catalog-price">${coins(species.price)}</span>`, "buy-plant", {
               className: "catalog-button", extra: `data-id="${species.id}" aria-label="Buy ${species.name} for ${species.price} coins"`,
-              disabled: !quantity || !open || state.coins < species.price,
+              disabled: !open || state.coins < species.price,
             })}</div>
           </article>`;
-        }).join("")}</div>` : `<div class="paper collection-empty">${icon("lock")} Breed a plant of this rarity to unlock its market listing.</div>`}
+        }).join("")}</div>` : `<div class="paper collection-empty">${icon("clock")} Check the next restock for plants of this rarity.</div>`}
       </section>`;
   }
 
@@ -978,9 +981,11 @@
         state.inventory[id] += item.quantity;
         return `${item.name} added to your supplies.`;
       }
-      case "buy-plant":
+      case "buy-plant": {
+        const isNew = species && !G.speciesUnlocked(state, species);
         if (!species || !G.buyPlant(state, species, now)) return "That plant is unavailable right now.";
-        return `${species.name} added to your shelves.`;
+        return isNew ? `${species.name} discovered. Added to your Field Guide.` : `${species.name} added to your shelves.`;
+      }
       case "pin-order":
       case "choose-delivery":
       case "deliver-order": {
@@ -1030,7 +1035,7 @@
         const seedling = G.potSeed(state, seed, now);
         if (!seedling) return;
         const name = SPECIES[seedling.species].name;
-        return newSpecies ? `${name} discovered. Market listing unlocked.` : `${name} added to your shelves.`;
+        return newSpecies ? `${name} discovered. Added to your Field Guide.` : `${name} added to your shelves.`;
       }
     }
   }

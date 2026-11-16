@@ -5,6 +5,7 @@ window.Garden = (() => {
   const MINUTE = 60_000;
   const HOUR = 60 * MINUTE;
   const RESTOCK_INTERVAL = 5 * MINUTE;
+  const ROTATING_COMMONS = 4;
   const CROSS_COST = 5;
   const INHERITED_TRAIT_CHANCE = .62;
   const FAVOR_WEIGHT = .80;
@@ -361,9 +362,14 @@ window.Garden = (() => {
   }
 
   function marketStock(state, species, now) {
-    if (!speciesUnlocked(state, species)) return 0;
-    if (species.tier === 0) return Infinity;
     const window = marketWindow(state, now);
+    if (species.tier === 0) {
+      if (species.id === "golden") return Infinity;
+      const alternatives = GROUPS[0].length - 1;
+      const first = (window * ROTATING_COMMONS) % alternatives;
+      const offset = (species.position - 1 - first + alternatives) % alternatives;
+      return offset < ROTATING_COMMONS ? Infinity : 0;
+    }
     const cadence = [0, 2, 4, 8][species.tier];
     const offset = [0, 0, 1, 3][species.tier];
     const rotation = Math.floor(window / cadence);
