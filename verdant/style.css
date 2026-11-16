@@ -247,10 +247,33 @@ select { width: 100%; background: var(--paper); border: 1px solid #d9e2d5; borde
 .catalog-copy { padding: 13px; display: flex; flex-direction: column; flex: 1; align-items: flex-start; }
 .catalog-copy h3 { font-size: 23px; }
 .catalog-copy p { color: var(--muted); font-size: .78rem; margin: 5px 0 11px; }
-.catalog-button, .locked { margin-top: auto; }
+.catalog-button { margin-top: auto; }
 .catalog-button { min-height: 34px; }
-.locked, .inline-note { display: flex; align-items: center; gap: 6px; color: #6d644d; font-size: .72rem; padding: 4px 0; }
+.inline-note { display: flex; align-items: center; gap: 6px; color: #6d644d; font-size: .72rem; }
 .inline-note { padding: 7px 10px; margin-bottom: 12px; background: #f1ebd9; border-radius: 8px; }
+.section-description { margin: -3px 0 15px; color: var(--muted); font-size: .84rem; }
+.catalog-copy .stock-label { display: inline-flex; align-items: center; gap: 5px; margin: -3px 0 9px; font-size: .73rem; font-weight: 675; }
+.stock-label.in-stock { color: #38624a; }
+.stock-label i { width: .46em; height: .46em; border-radius: 50%; background: currentColor; }
+.collection-empty { display: flex; align-items: center; gap: 8px; min-height: 73px; padding: 14px 17px; color: var(--muted); font-size: .83rem; }
+.collection-empty svg { color: var(--green); }
+.order-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.order-card { display: flex; flex-direction: column; padding: 15px; }
+.order-card.pinned-order { border-color: #96aa86; }
+.order-card h3 { margin: 10px 0 4px; font-size: 25px; }
+.order-card p { flex: 1; margin-bottom: 13px; color: var(--muted); font-size: .84rem; }
+.order-card .button[aria-pressed="true"] { border-color: #9eb394; background: #edf2e5; }
+.order-bottom { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; padding-top: 9px; border-top: 1px solid var(--line); }
+.delivery-options { display: grid; gap: 7px; margin-top: 12px; }
+.delivery-options .delivery-option { justify-content: space-between; text-align: left; padding: 8px 10px; }
+.delivery-option small { display: block; margin-top: 3px; color: var(--muted); font-weight: 500; }
+.journal-section { margin-top: 23px; }
+.journal-list { display: grid; gap: 8px; }
+.journal-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px 13px; padding: 10px 13px; }
+.journal-row h3 { font-size: 22px; }
+.journal-row p, .journal-unavailable { color: var(--muted); font-size: .76rem; }
+.journal-parents { display: flex; flex-wrap: wrap; align-items: center; gap: 0 7px; margin-top: 4px; color: #465d47; font-size: .79rem; }
+.journal-parents small { color: var(--muted); }
 .guide-count { display: grid; flex-shrink: 0; color: #49644c; text-align: right; font-size: .78rem; }
 .guide-count strong { color: #2e5438; font: 500 36px/1.15 var(--serif); }
 .breeding-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 15px; margin-top: 18px; align-items: start; }
@@ -306,7 +329,7 @@ dialog::backdrop { background: #162c20a6; }
   .header-stats { gap: 8px; }
   .supplies-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
 }
-@media (max-width: 825px) {
+@media (max-width: 900px) {
   .topbar-inner { grid-template-columns: 1fr auto; gap: 0 12px; min-height: 0; padding-top: 10px; }
   nav { grid-row: 2; grid-column: 1 / -1; justify-content: center; padding: 7px 0; }
   .header-stats { grid-column: 2; grid-row: 1; }
@@ -316,6 +339,9 @@ dialog::backdrop { background: #162c20a6; }
   .income-card { margin-top: 0; }
   .catalog-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .breeding-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 690px) {
+  .order-grid { grid-template-columns: 1fr; gap: 8px; }
 }
 @media (max-width: 550px) {
   .topbar-inner, #app { width: calc(100% - 26px); }
@@ -358,4 +384,6 @@ dialog::backdrop { background: #162c20a6; }
   .parents { grid-template-columns: minmax(0, 1fr) 15px minmax(0, 1fr); gap: 5px; }
   .parent-slot select { font-size: .75rem; }
   .seed-row .tile-icon { width: 30px; height: 30px; }
+  .journal-row { grid-template-columns: auto minmax(0, 1fr); }
+  .journal-row > :last-child:is(button, small) { grid-column: 2; justify-self: start; }
 }
