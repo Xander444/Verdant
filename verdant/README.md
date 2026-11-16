@@ -12,13 +12,16 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 
 - Your starter is a sick Golden Pothos. Water its dry soil, move it to the recommended light, and prune it. Claim your goal reward when it reaches 72% health.
 - Move plants between the shade, window, and grow lamp. Drag a pot to another shelf, or select the pot and use **Move here**. Each shelf previews how quickly the selected plant's soil will dry there.
+- Use **Upgrade shelf** to install a humidity tray on any shelf, a shade curtain at the window, or a daylight dimmer for the grow lamp.
 - Use the **Watering can** to hold and pour until the soil moisture reaches the green range. The **Start pouring** and **Stop pouring** controls also work by tapping or using a keyboard. **Quick water** is available for dry soil.
 - Open **Prune**, snip each marked leaf, and choose **Finish pruning** to keep more growth. **Quick prune** takes one step. Both improve the plant's shape and share the same cooldown.
+- On a woody plant, open **Train branches** to select and bend a branch. Save the shape to keep the new silhouette.
 - Buy a second Common plant. Feed both with your starting fertilizer to bring them up to breeding size. You need an open shelf space, five coins, and two plants with at least 72% health and 42% growth to start a cross.
 - Pair two different plants of the same rarity for a chance at the next rarity. The Breeding Room shows the odds, and potting a new species reveals its name and unlocks its listings. Breed two of the same species to discover new phenotypes.
 - The Breeding Journal records each potted seedling, its phenotype, and both parents. Use a saved pair again while both parents remain on your shelves and meet the breeding requirements.
 - When two plants of the same species have different phenotypes, you can favor one for the cross. The Breeding Room shows the updated odds and the journal remembers your choice.
-- Plants on display earn fractional coins over time. Collect whole coins from the greenhouse. Large, healthy, well-pruned plants earn more and sell for more. Pruning improves shape at the cost of a small amount of growth.
+- Plants with at least 83% growth and 75% health can provide a cutting of the same phenotype. A cutting uses one nursery space and costs its parent 8 growth points. It roots in 20 to 75 minutes, depending on rarity.
+- Up to two plants can earn display coins at a time. Select **Swap onto display** to replace one when the display is full. Collect whole coins in the greenhouse. Large, healthy, well-pruned plants earn more and sell for more.
 - The device's local clock drives light, drying, growth, and germination. Plant care and display earnings catch up for up to seven days between visits. Progress saves in the browser you play in.
 
 ## Collector orders and market restocks

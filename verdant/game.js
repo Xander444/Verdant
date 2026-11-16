@@ -42,6 +42,7 @@
     leaf: '<path d="M5 19c-2-5 1-12 7-13l8-2-2 8c-1 6-7 9-13 7Zm0 0 10-9"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
     shelf: '<path d="M3 4v16M21 4v16M3 9h18M3 16h18m-14-7V5h4v4m3 7v-4h3v4"/>',
+    branch: '<path d="M9 21V10m0 6c0-3 3-5 7-5m-7 1C9 9 7 7 4 7m5 4c0-4 4-7 9-7"/><circle cx="18" cy="4" r="1.4"/><circle cx="4" cy="7" r="1.4"/><circle cx="16" cy="11" r="1.4"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',
     tag: '<path d="M3 4h8l10 10-7 7L3 10Z"/><circle cx="7.5" cy="8" r="1"/>',
   };
@@ -60,8 +61,8 @@
   const currentPage = () => ["greenhouse", "market", "orders", "breeding", "guide"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "greenhouse";
   const button = (label, action, { symbol, extra = "", className = "", disabled = false } = {}) =>
     `<button type="button" class="button ${className}" data-action="${action}" ${extra}${disabled ? " disabled" : ""}>${symbol ? icon(symbol) : ""}${label}</button>`;
-  const canvas = (species, { pheno = 0, size = 58, health = 95, quality = 0, large = false } = {}) =>
-    `<canvas class="plant-art" width="${large ? 680 : 340}" height="${large ? 610 : 305}" data-species="${species.id}" data-pheno="${pheno}" data-size="${percent(size)}" data-health="${percent(health)}" data-quality="${quality}" aria-hidden="true"></canvas>`;
+  const canvas = (species, { pheno = 0, size = 58, health = 95, quality = 0, training, large = false } = {}) =>
+    `<canvas class="plant-art" width="${large ? 680 : 340}" height="${large ? 610 : 305}" data-species="${species.id}" data-pheno="${pheno}" data-size="${percent(size)}" data-health="${percent(health)}" data-quality="${quality}"${training ? ` data-training="${G.branchAngles({ training }).join(",")}"` : ""} aria-hidden="true"></canvas>`;
 
   let state;
   let lastSaved;
@@ -70,6 +71,7 @@
   let draggedPlant;
   let pouring;
   let pruning;
+  let training;
   let view = { marketFilter: "all", guideFilter: "all", parentA: "", parentB: "", favoredParent: "" };
 
   function syncSave() {
@@ -84,6 +86,8 @@
           state.journal ??= [];
           state.marketPurchases ??= { window: -1, quantities: {} };
           state.orders ??= null;
+          state.stationUpgrades ??= [[], [], []];
+          G.enforceDisplayLimit(state);
         }
       }
       lastSaved = raw;
@@ -125,7 +129,7 @@
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   }
 
-  const dryingLabel = (plant, now, spot) => `Loses ${G.dryingRate(plant, now, spot).toFixed(1)}% moisture/hr`;
+  const dryingLabel = (plant, now, spot) => `Loses ${G.dryingRate(plant, now, spot, state).toFixed(1)}% moisture/hr`;
 
   const countdown = until => `<span data-countdown="${until}"></span>`;
 
@@ -174,7 +178,7 @@
     const allowed = controlsFor(plant, now);
     const sick = plant.health < 55;
     const waterMood = plant.water < needs.dry ? "warning" : plant.water > needs.wet ? "warning" : "blue";
-    const lightGood = needs.light === plant.location;
+    const lightGood = G.lightWorks(plant, now, plant.location, state);
     const stage = plant.size >= 83 ? "Mature" : plant.size >= 42 ? "Established" : plant.size >= 23 ? "Young plant" : "Seedling";
     const healthLabel = sick ? "Needs care" : plant.health < 72 ? "Recovering" : "Healthy";
     const healthTip = sick ? "Needs attention" : plant.health < 72 ? "On the mend" : "Doing well";
@@ -203,12 +207,14 @@
           ${button("Quick water", "water", { symbol: "drop", disabled: !allowed.water, extra: 'title="Water dry soil"' })}
           ${button("Move", "move", { symbol: "sun", extra: 'title="Choose where this plant gets its light"' })}
           ${button("Prune", "prune", { symbol: "prune", disabled: !allowed.prune, extra: `title="${allowed.timers.prune > now ? `Ready in ${remaining(allowed.timers.prune, now)}` : "Trim damaged leaves and improve the plant's shape"}"` })}
+          ${species.shape === "tree" ? button("Train branches", "train", { symbol: "branch" }) : ""}
           ${button(`Feed <small>${state.inventory.fertilizer}</small>`, "feed", { symbol: "fertilizer", disabled: !allowed.feed, extra: `title="${allowed.timers.feed > now ? `Ready in ${remaining(allowed.timers.feed, now)}` : "Use one dose of fertilizer"}"` })}
           ${needs.humidity ? button("Mist", "mist", { symbol: "mist", disabled: !allowed.mist }) : ""}
           ${state.inventory.tonic ? button(`Tonic <small>${state.inventory.tonic}</small>`, "tonic", { symbol: "heart", disabled: !allowed.tonic }) : ""}
         </div>
         <div class="care-trade">
-          ${button(plant.onDisplay ? "Remove from display" : "Put on display", "display", { symbol: "display", className: "text-button" })}
+          ${button(plant.onDisplay ? "Remove from display" : G.displayedPlants(state).length >= G.DISPLAY_LIMIT ? "Swap onto display" : "Put on display", "display", { symbol: "display", className: "text-button" })}
+          ${button("Take cutting", "view-cutting", { symbol: "sprout", className: "text-button" })}
           ${button(`Sell for ${numberFormat.format(G.salePrice(plant))}`, "sell", { symbol: "tag", className: "text-button sell-link" })}
         </div>
       </div>
@@ -233,12 +239,12 @@
   }
 
   function incomeCard() {
-    const displayed = state.plants.filter(plant => plant.onDisplay);
+    const displayed = G.displayedPlants(state);
     const rate = displayed.reduce((sum, plant) => sum + G.displayRate(plant), 0);
     const available = Math.floor(state.displayBank + .0000001);
     return `<section class="paper income-card">
       <div class="income-heading"><span class="tile-icon">${icon("display")}</span><div><h3>Display earnings</h3>
-        <p>${displayed.length ? `${displayed.length} on display · ${rate.toFixed(2)} coins/hr` : "Put a plant on display to earn coins."}</p></div></div>
+        <p>${displayed.length} / ${G.DISPLAY_LIMIT} display spots${displayed.length ? ` · ${rate.toFixed(2)} coins/hr` : ""}</p></div></div>
       <div class="income-bottom"><span class="income-coins">${coins(available)}</span>
         ${button("Collect", "collect", { className: "compact", disabled: available < 1 })}</div>
     </section>`;
@@ -246,7 +252,6 @@
 
   function shelfView(plant, now) {
     const slots = G.freeSlots(state);
-    const best = plant && G.careNeeds(plant, now).light;
     const plantTile = item => {
       const species = SPECIES[item.species];
       return `<button class="shelf-plant ${item === plant ? "selected" : ""}" type="button" draggable="true" data-action="select" data-id="${item.id}" aria-pressed="${item === plant}">
@@ -257,20 +262,26 @@
     const stations = LOCATIONS.map((name, spot) => {
       const residents = state.plants.filter(item => item.location === spot);
       const current = plant?.location === spot;
-      const recommended = best === spot;
+      const recommended = plant && G.lightWorks(plant, now, spot, state);
+      const upgrades = Object.entries(G.STATION_UPGRADES).filter(([id]) => G.hasUpgrade(state, spot, id));
       return `<article class="paper station station-${spot}" data-station="${spot}">
         <div class="station-heading"><span class="tile-icon">${icon(stationIcons[spot])}</span>
           <div><h3>${name}</h3><p>${stationNotes[spot]}</p></div>
-          ${recommended ? '<span class="count-pill station-recommended">Best light now</span>' : ""}</div>
+          ${recommended ? '<span class="count-pill station-recommended">Good light now</span>' : ""}</div>
         <div class="station-pots">${residents.length ? residents.map(plantTile).join("") :
           `<div class="station-empty">${icon("sprout")} Empty spot</div>`}</div>
         ${plant ? `<div class="station-footer"><small title="Current soil drying rate">${icon("drop")} ${dryingLabel(plant, now, spot)}</small>
           ${button(current ? "Here now" : "Move here", "station-place", { className: "compact", disabled: current,
             extra: `data-id="${spot}" data-plant="${plant.id}" aria-label="${current ? `${SPECIES[plant.species].name} is here` : `Move ${SPECIES[plant.species].name} to ${name.toLowerCase()}`}"`,
           })}</div>` : ""}
+        <div class="station-upgrades">
+          ${button("Upgrade shelf", "view-upgrades", { symbol: "plus", className: "text-button",
+            extra: `data-id="${spot}" aria-label="Upgrade ${name.toLowerCase()} shelf"` })}
+          ${upgrades.map(([, upgrade]) => `<span class="count-pill">${upgrade.name}</span>`).join("")}
+        </div>
       </article>`;
     }).join("");
-    const seeds = state.seeds.map(seed => `<a class="shelf-plant seed-slot" href="#breeding"><span class="shelf-placeholder">${icon("sprout")}</span><span><strong>${seed.readyAt <= now ? "Ready to pot" : "Seed tray"}</strong><small>Reserved space</small></span></a>`).join("");
+    const seeds = state.seeds.map(seed => `<a class="shelf-plant seed-slot" href="#breeding"><span class="shelf-placeholder">${icon("sprout")}</span><span><strong>${seed.readyAt <= now ? "Ready to pot" : seed.source === "cutting" ? "Rooting cutting" : "Seed tray"}</strong><small>Reserved space</small></span></a>`).join("");
     const empty = slots > 0 ? `<a class="shelf-plant empty-slot" href="#market"><span class="shelf-placeholder">${icon("plus")}</span><span><strong>Add a plant</strong><small>${slots} open ${slots === 1 ? "space" : "spaces"}</small></span></a>` : "";
     return `<section class="shelf-section" aria-labelledby="shelf-title">
       <div class="section-heading"><div class="heading-with-count"><h2 id="shelf-title">Your shelves</h2><span class="count-pill">${state.capacity - slots} / ${state.capacity} spaces</span></div><a class="text-link" href="#market">${icon("plus")} Expand shelves</a></div>
@@ -287,7 +298,7 @@
         <section aria-labelledby="care-title">
           <div class="section-heading"><h2 id="care-title">Plant care</h2><span class="section-note">${icon("clock")} Tracks your local time</span></div>
           ${plant ? careView(plant, now) : `<div class="paper empty-state"><span class="tile-icon">${icon("sprout")}</span><h3>Your shelves are ready</h3>
-            <p>${canRescue() ? "Adopt a free rescue pothos." : G.freeSlots(state) ? "Find a new plant at the market." : "Your shelf spaces are reserved for seedlings."}</p>
+            <p>${canRescue() ? "Adopt a free rescue pothos." : G.freeSlots(state) ? "Find a new plant at the market." : "Your shelf spaces are reserved for plants in the nursery."}</p>
             ${canRescue() ? button("Adopt rescue plant", "rescue", { symbol: "sprout", className: "primary" }) :
               G.freeSlots(state) ? '<a class="button primary" href="#market">Open market</a>' : '<a class="button primary" href="#breeding">Open breeding room</a>'}</div>`}
         </section>
@@ -379,23 +390,24 @@
   function journal() {
     return `<section class="journal-section" aria-labelledby="journal-title">
       <div class="section-heading"><div class="heading-with-count"><h2 id="journal-title">Breeding journal</h2>
-        <span class="count-pill">${state.journal.length} ${state.journal.length === 1 ? "seedling" : "seedlings"}</span></div></div>
-      ${!state.journal.length ? `<div class="paper collection-empty">${icon("book")} Your first potted seedling will appear here with its parents.</div>` :
+        <span class="count-pill">${state.journal.length} ${state.journal.length === 1 ? "entry" : "entries"}</span></div></div>
+      ${!state.journal.length ? `<div class="paper collection-empty">${icon("book")} Potted seedlings and cuttings appear here with their parent plants.</div>` :
         `<div class="journal-list">${state.journal.map(entry => {
           const child = SPECIES[entry.species];
           const pair = entry.parents.map(parent => {
             const species = SPECIES[parent.species];
             return `<span><strong>${species.name}</strong> <small>#${parent.id} · ${species.phenotypes[parent.pheno]}</small></span>`;
           }).join("<span aria-hidden=\"true\">×</span>");
+          const fromCutting = entry.source === "cutting";
           const favorite = entry.parents.find(parent => parent.id === entry.favoredParentId);
           const canReuse = entry.parents.length === 2 && entry.parents.every(parent => state.plants.some(plant => plant.id === parent.id));
           return `<article class="paper journal-row">
             <span class="shelf-preview">${canvas(child, { pheno: entry.pheno, size: 38 })}</span>
             <div><h3>${child.name}</h3><p>${child.phenotypes[entry.pheno]} · ${dateFormat.format(entry.pottedAt)}</p>
               ${favorite ? `<span class="journal-favorite">${icon("leaf")} Favored ${SPECIES[favorite.species].phenotypes[favorite.pheno]} · #${favorite.id}</span>` : ""}
-              <div class="journal-parents">${pair || "Parents unavailable"}</div></div>
+              <div class="journal-parents">${fromCutting ? "Cutting from " : ""}${pair || "Parents unavailable"}</div></div>
             ${canReuse ? button("Use this pair", "reuse-parents", { symbol: "dna", className: "compact", extra: `data-id="${entry.id}"` }) :
-              entry.parents.length ? '<small class="journal-unavailable">Pair no longer on shelves</small>' : ""}
+              entry.parents.length && !fromCutting ? '<small class="journal-unavailable">Pair no longer on shelves</small>' : ""}
           </article>`;
         }).join("")}</div>`}
     </section>`;
@@ -459,15 +471,16 @@
           ${button("Start cross", "breed", { symbol: "dna", className: "primary", disabled: !valid || Boolean(cause) })}
         </section>
         <section class="paper nursery-card">
-          <div class="section-heading"><h2>Seed tray</h2><span class="count-pill">${state.seeds.length} growing</span></div>
+          <div class="section-heading"><h2>Nursery tray</h2><span class="count-pill">${state.seeds.length} growing</span></div>
           ${state.seeds.length ? `<div class="seed-list">${state.seeds.map(seed => {
             const ready = seed.readyAt <= now;
             const species = SPECIES[seed.species];
+            const cutting = seed.source === "cutting";
             const name = G.speciesUnlocked(state, species) ? species.name : `Undiscovered ${RARITIES[species.tier]} plant`;
-            return `<article class="seed-row"><span class="tile-icon">${icon("sprout")}</span><div><h3>${ready ? "Ready to pot" : "Germinating"}</h3>
-              <p>${ready ? name : `${countdown(seed.readyAt)} remaining`}</p></div>
-              ${button("Pot seedling", "pot", { className: "compact", extra: `data-id="${seed.id}"`, disabled: !ready })}</article>`;
-          }).join("")}</div>` : `<div class="nursery-empty"><span class="tile-icon">${icon("leaf")}</span><h3>The tray is empty</h3><p>New crosses will germinate here. Each seed reserves one shelf space.</p></div>`}
+            return `<article class="seed-row"><span class="tile-icon">${icon("sprout")}</span><div><h3>${ready ? "Ready to pot" : cutting ? "Rooting cutting" : "Germinating"}</h3>
+              <p>${cutting || ready ? name : ""}${!ready ? `${cutting ? " · " : ""}${countdown(seed.readyAt)} remaining` : ""}</p></div>
+              ${button(cutting ? "Pot cutting" : "Pot seedling", "pot", { className: "compact", extra: `data-id="${seed.id}"`, disabled: !ready })}</article>`;
+          }).join("")}</div>` : `<div class="nursery-empty"><span class="tile-icon">${icon("leaf")}</span><h3>The tray is empty</h3><p>Seeds and cuttings grow here. Each reserves one shelf space.</p></div>`}
         </section>
       </div>${journal()}`;
   }
@@ -549,13 +562,15 @@
   }
 
   function showMove(plant, now) {
-    const best = G.careNeeds(plant, now).light;
     const phase = G.phaseAt(now).name.toLowerCase();
     openDialog("Move plant", `<p>Choose a spot for the ${phase}. Light needs change over the day.</p>
-      <div class="move-options">${LOCATIONS.map((spot, i) => button(`${spot}${i === best ? " <small>Recommended now</small>" : ""}${i === plant.location ? " <small>Current</small>" : ""}`, "place", {
-        symbol: stationIcons[i], extra: `data-id="${i}" data-plant="${plant.id}"`, disabled: i === plant.location,
-        className: i === best ? "recommended" : "",
-      })).join("")}</div>`);
+      <div class="move-options">${LOCATIONS.map((spot, i) => {
+        const good = G.lightWorks(plant, now, i, state);
+        return button(`${spot}${good ? " <small>Recommended now</small>" : ""}${i === plant.location ? " <small>Current</small>" : ""}`, "place", {
+          symbol: stationIcons[i], extra: `data-id="${i}" data-plant="${plant.id}"`, disabled: i === plant.location,
+          className: good ? "recommended" : "",
+        });
+      }).join("")}</div>`);
   }
 
   function showWatering(plant, now) {
@@ -682,7 +697,7 @@
     const panel = dialog.querySelector(".prune-panel");
     const art = panel.querySelector("canvas");
     const removed = new Set();
-    const targets = window.PlantArt.draw(art, removed) || [];
+    const targets = window.PlantArt.draw(art, { removedLeaves: removed }) || [];
     pruning = { plantId: plant.id, panel, art, removed, total: targets.length };
     panel.querySelector("[data-prune-targets]").innerHTML = targets.map((target, index) =>
       `<button class="snip-target" type="button" data-snip="${target.id}"
@@ -705,11 +720,82 @@
     if (!pruning || !pruning.panel.contains(target) || target.hidden) return;
     const { art, panel, removed } = pruning;
     removed.add(Number(target.dataset.snip));
-    window.PlantArt.draw(art, removed);
+    window.PlantArt.draw(art, { removedLeaves: removed });
     const restoreFocus = document.activeElement === target;
     target.hidden = true;
     const finish = showPruneProgress();
     if (restoreFocus) (panel.querySelector("[data-snip]:not([hidden])") || finish).focus({ preventScroll: true });
+  }
+
+  function showTraining(plant) {
+    const species = SPECIES[plant.species];
+    const original = G.branchAngles(plant);
+    openDialog(`Train ${species.name}`, `<div class="training-panel">
+      <div class="prune-scene"><div class="prune-art">${canvas(species, { ...plant, large: true })}</div></div>
+      <div class="training-controls">
+        <label for="training-branch">Branch</label>
+        <select id="training-branch" data-training-branch>${G.TREE_BRANCHES.map((name, i) => `<option value="${i}">${name}</option>`).join("")}</select>
+        <div><label for="training-angle">Bend</label><output for="training-angle" data-training-output></output></div>
+        <input id="training-angle" data-training-angle type="range" min="${-G.BRANCH_LIMIT}" max="${G.BRANCH_LIMIT}" step="1">
+      </div>
+      <div class="dialog-actions">${button("Cancel", "close")}${button("Save shape", "save-training", { symbol: "branch", className: "primary", disabled: true })}</div>
+    </div>`);
+    const panel = dialog.querySelector(".training-panel");
+    training = { plantId: plant.id, active: 0, original, angles: [...original], panel };
+    updateTraining();
+  }
+
+  function updateTraining() {
+    const { panel, active, angles, original } = training;
+    const angle = angles[active];
+    const text = angle === 0 ? "Straight" : `${Math.abs(angle)}° ${angle < 0 ? "counterclockwise" : "clockwise"}`;
+    const slider = panel.querySelector("[data-training-angle]");
+    slider.value = angle;
+    slider.setAttribute("aria-valuetext", text);
+    panel.querySelector("[data-training-output]").textContent = text;
+    const art = panel.querySelector("canvas");
+    art.dataset.training = angles.join(",");
+    window.PlantArt.draw(art, { highlightBranch: active });
+    panel.querySelector('[data-action="save-training"]').disabled = !angles.some((value, i) => value !== original[i]);
+  }
+
+  function showCutting(plant, now) {
+    const species = SPECIES[plant.species];
+    const problem = G.cuttingProblem(plant, now) || (G.freeSlots(state) <= 0 ? "Free a shelf space to reserve for the cutting" : "");
+    const duration = G.rootingTime(plant) / G.MINUTE;
+    openDialog(`Take a cutting from ${species.name}`, `<p>Grow a new ${species.phenotypes[plant.pheno]} plant. The cutting takes ${duration} minutes to root in the nursery and reserves one shelf space.</p>
+      <p class="species-needs">The parent gives up 8 growth points and can provide one cutting every 12 hours.</p>
+    ${problem ? `<p class="cutting-warning">${icon("info")} ${problem}</p>` : ""}
+      <div class="dialog-actions">${button("Cancel", "close")}${button("Take cutting", "cut", {
+        symbol: "prune", className: "primary", extra: `data-id="${plant.id}"`, disabled: Boolean(problem),
+      })}</div>`);
+  }
+
+  function showUpgrades(spot) {
+    const available = Object.entries(G.STATION_UPGRADES).filter(([, item]) => item.stations.includes(spot));
+    const symbols = { tray: "mist", curtain: "sun", timer: "clock" };
+    openDialog(`${LOCATIONS[spot]} upgrades`, `<div class="upgrade-list">${available.map(([id, item]) => {
+      const installed = G.hasUpgrade(state, spot, id);
+      return `<article class="upgrade-option">
+        <span class="tile-icon">${icon(symbols[id])}</span><div><h3>${item.name}</h3><p>${item.description}</p></div>
+        ${installed ? `<span class="count-pill">${icon("check")} Installed</span>` : button(coins(item.cost), "buy-upgrade", {
+          className: "compact", extra: `data-id="${id}" data-station="${spot}" aria-label="Buy ${item.name} for ${item.cost} coins"`,
+          disabled: state.coins < item.cost,
+        })}
+      </article>`;
+    }).join("")}</div>`);
+  }
+
+  function showDisplaySwap(incoming) {
+    const species = SPECIES[incoming.species];
+    openDialog("Swap a display plant", `<p>Both display spots are filled. Choose which plant to take down to make room for ${species.name}.</p>
+      <div class="delivery-options">${G.displayedPlants(state).map(plant => {
+        const displayed = SPECIES[plant.species];
+        return button(`<span>${displayed.name} #${plant.id}<small>${displayed.phenotypes[plant.pheno]}</small></span>
+          <span class="count-pill">${G.displayRate(plant).toFixed(2)} coins/hr</span>`, "swap-display", {
+          className: "delivery-option", extra: `data-id="${plant.id}" data-plant="${incoming.id}" aria-label="Replace ${displayed.name} number ${plant.id}"`,
+        });
+      }).join("")}</div>`);
   }
 
   function chooseDelivery(order) {
@@ -778,9 +864,20 @@
         const moved = state.plants.find(item => item.id === Number(data.plant));
         const spot = Number(id);
         if (action === "place") dialog.close();
-        if (!moved || !G.movePlant(moved, spot, now)) return;
+        if (!moved || !G.movePlant(moved, spot, now, state)) return;
         state.selected = moved.id;
         return `${SPECIES[moved.species].name} moved to ${LOCATIONS[spot].toLowerCase()}.`;
+      }
+      case "view-upgrades": {
+        const spot = Number(id);
+        if (LOCATIONS[spot]) showUpgrades(spot);
+        return;
+      }
+      case "buy-upgrade": {
+        const spot = Number(data.station);
+        if (!G.buyUpgrade(state, spot, id)) return "This shelf upgrade is unavailable.";
+        dialog.close();
+        return `${G.STATION_UPGRADES[id].name} installed at the ${LOCATIONS[spot].toLowerCase()} shelf.`;
       }
       case "watering-can":
         if (plant) showWatering(plant, now);
@@ -797,16 +894,46 @@
         if (!trimmed || !G.prunePlant(trimmed, now, manual)) return "This plant is unavailable for pruning.";
         return `${SPECIES[trimmed.species].name} pruned. Shape ${trimmed.quality}/5.`;
       }
+      case "train":
+        if (plant && SPECIES[plant.species].shape === "tree") showTraining(plant);
+        return;
+      case "save-training": {
+        if (!training) return;
+        const tree = state.plants.find(item => item.id === training.plantId);
+        dialog.close();
+        if (!tree || !G.trainBranches(tree, training.angles)) return "This plant is unavailable for training.";
+        return `${SPECIES[tree.species].name} shape saved.`;
+      }
+      case "view-cutting":
+        if (plant) showCutting(plant, now);
+        return;
+      case "cut": {
+        const parent = state.plants.find(item => item.id === Number(id));
+        if (!G.takeCutting(state, parent, now)) return "This cutting is unavailable right now.";
+        dialog.close();
+        return `Cutting from ${SPECIES[parent.species].name} is rooting in the nursery.`;
+      }
       case "water":
       case "feed":
       case "mist":
       case "tonic":
         if (plant) return careAction(action, plant, now);
         return;
-      case "display":
+      case "display": {
         if (!plant) return;
-        plant.onDisplay = !plant.onDisplay;
+        if (!G.setDisplay(state, plant)) {
+          showDisplaySwap(plant);
+          return;
+        }
         return plant.onDisplay ? `${SPECIES[plant.species].name} is on display.` : "Plant removed from display.";
+      }
+      case "swap-display": {
+        const incoming = state.plants.find(item => item.id === Number(data.plant));
+        const outgoing = state.plants.find(item => item.id === Number(id));
+        dialog.close();
+        if (!outgoing || !G.setDisplay(state, incoming, outgoing)) return "That display spot changed. Choose again.";
+        return `${SPECIES[incoming.species].name} is on display.`;
+      }
       case "collect": {
         const available = Math.floor(state.displayBank + .0000001);
         if (available < 1) return;
@@ -961,6 +1088,17 @@
     if (dialog.open) return;
     endPour(false);
     pruning = undefined;
+    training = undefined;
+  });
+  dialog.addEventListener("change", event => {
+    if (!training || !event.target.matches("[data-training-branch]")) return;
+    training.active = Number(event.target.value);
+    updateTraining();
+  });
+  dialog.addEventListener("input", event => {
+    if (!training || !event.target.matches("[data-training-angle]")) return;
+    training.angles[training.active] = Number(event.target.value);
+    updateTraining();
   });
   window.addEventListener("blur", () => endPour(false));
 

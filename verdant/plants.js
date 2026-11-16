@@ -2,7 +2,7 @@
 "use strict";
 
 window.PlantArt = (() => {
-  const { SPECIES } = window.Garden;
+  const { SPECIES, branchAngles } = window.Garden;
   const ink = {
     dark: [26, 58, 35], light: [165, 184, 116], dry: [166, 137, 63],
     variants: [[237, 202, 113], [224, 233, 195], [234, 164, 163], [190, 221, 125],
@@ -142,8 +142,18 @@ window.PlantArt = (() => {
     stem(ctx, 9, 0, 22, 6, 9, "#775436", 3.4);
     const crowns = [[-77, -64], [65, -77], [-51, -100], [43, -117], [-4, -143]];
     const spread = form.spread * (1 - .033 * plant.quality);
-    const tips = crowns.map(([x, y]) => [x * spread + form.lean * .64, y * form.height]);
-    tips.forEach(([x, y], i) => stem(ctx, (i + 1) * form.lean / 8, y + 20, x, y, x * .32, "#765138", 5 - i * .53));
+    const angles = branchAngles(plant);
+    const tips = crowns.map(([x, y], i) => {
+      const branchX = (i + 1) * form.lean / 8;
+      const branchY = y * form.height + 20;
+      const dx = x * spread + form.lean * .64 - branchX;
+      const dy = -20;
+      const angle = angles[i] * Math.PI / 180;
+      const tipX = branchX + dx * Math.cos(angle) - dy * Math.sin(angle);
+      const tipY = branchY + dx * Math.sin(angle) + dy * Math.cos(angle);
+      stem(ctx, branchX, branchY, tipX, tipY, tipX * .32, "#765138", 5 - i * .53);
+      return [tipX, tipY];
+    });
     const count = form.leaves + Math.floor(plant.quality / 2);
     for (const [x, y] of tips) {
       for (let i = 0; i < count; i++) {
@@ -160,6 +170,7 @@ window.PlantArt = (() => {
         }
       }
     }
+    return tips;
   }
 
   function drawCanopy(ctx, species, plant, drawLeaf) {
@@ -173,8 +184,7 @@ window.PlantArt = (() => {
     const colors = [foliage, mix(foliage, ink.light, .4 + wilt * .11), mix(foliage, ink.dark, .56), variant];
     const shape = species.shape;
     if (shape === "tree") {
-      drawTree(ctx, species, plant, colors, random, drawLeaf);
-      return;
+      return drawTree(ctx, species, plant, colors, random, drawLeaf);
     }
     if (species.id === "echeveria") {
       const rings = [[0, 11, 79], [1.5, 9, 59], [2.2, 7, 42], [2.4, 5, 28]];
@@ -295,11 +305,12 @@ window.PlantArt = (() => {
     return targets;
   }
 
-  function draw(canvas, removedLeaves) {
+  function draw(canvas, { removedLeaves, highlightBranch } = {}) {
     const plant = {
       species: canvas.dataset.species, pheno: Number(canvas.dataset.pheno || 0),
       size: Number(canvas.dataset.size || 65), health: Number(canvas.dataset.health || 95),
       quality: Number(canvas.dataset.quality || 0),
+      training: canvas.dataset.training?.split(",").map(Number),
     };
     const species = SPECIES[plant.species];
     if (!species) return;
@@ -318,7 +329,18 @@ window.PlantArt = (() => {
     ctx.translate(0, 3);
     ctx.scale(scale, scale);
     if (!removedLeaves) {
-      drawCanopy(ctx, species, plant, leaf);
+      const tip = drawCanopy(ctx, species, plant, leaf)?.[highlightBranch];
+      if (tip) {
+        ctx.beginPath();
+        ctx.arc(tip[0], tip[1] - 5, 13, 0, 2 * Math.PI);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#fff9df";
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(tip[0], tip[1] - 5, 11, 0, 2 * Math.PI);
+        ctx.strokeStyle = "#8c5935";
+        ctx.stroke();
+      }
       return;
     }
 

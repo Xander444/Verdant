@@ -228,6 +228,12 @@ nav a[aria-current] { color: #2b5639; background: #e8ede2; }
 .station-footer > small { color: var(--muted); font-size: .72rem; }
 .station-footer > small svg { color: #508183; }
 .station-footer .button { min-height: 30px; }
+.station-upgrades {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; min-height: 33px;
+  padding: 2px 10px; border-top: 1px solid #edf0e7;
+}
+.station-upgrades .button { min-height: 28px; margin-right: auto; }
+.station-upgrades .count-pill { margin-block: 2px; font-size: .67rem; }
 .shelf-plant {
   display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 69px; padding: 5px 10px 5px 5px; text-align: left;
   background: #fdfcf6; border: 1px solid var(--line); border-radius: 11px; line-height: 1.24;
@@ -357,6 +363,16 @@ dialog::backdrop { background: #162c20a6; }
 .dialog-inner h3 { font-size: 23px; margin: 15px 0 7px; }
 .dialog-inner .species-needs { padding: 8px; background: #eff2e6; border-radius: 8px; margin-top: 10px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 17px; }
+.upgrade-list { display: grid; gap: 7px; }
+.upgrade-option {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: #fafbf4;
+}
+.upgrade-option .tile-icon { width: 30px; height: 30px; }
+.upgrade-option .tile-icon svg { width: 18px; height: 18px; }
+.upgrade-option h3 { margin: 0 0 3px; font-size: 20px; }
+.upgrade-option p { font-size: .77rem; }
+.dialog-inner .cutting-warning { margin-top: 8px; color: #865928; }
 .move-options { display: grid; gap: 7px; margin-top: 12px; }
 .move-options button { justify-content: flex-start; gap: 8px; }
 .move-options button.recommended { border-color: #89a787; }
@@ -375,6 +391,11 @@ dialog::backdrop { background: #162c20a6; }
 .prune-readout { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .8rem; color: var(--muted); }
 .prune-readout strong { color: var(--ink); }
 .prune-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+.training-controls { display: grid; gap: 5px; }
+.training-controls > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 3px; }
+.training-controls label { color: var(--ink); font-size: .83rem; font-weight: 700; }
+.training-controls output { color: var(--muted); font-size: .8rem; }
+.training-controls input[type="range"] { width: 100%; margin: 2px 0; accent-color: var(--green); }
 .water-scene {
   position: relative; overflow: hidden; display: grid; justify-items: center; align-items: end; height: 148px; margin: 1px 0 11px;
   border: 1px solid #e1e7d9; border-radius: 10px;

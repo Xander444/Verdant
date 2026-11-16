@@ -8,6 +8,7 @@ window.Garden = (() => {
   const CROSS_COST = 5;
   const INHERITED_TRAIT_CHANCE = .62;
   const FAVOR_WEIGHT = .80;
+  const DISPLAY_LIMIT = 2;
   const RARITIES = ["Common", "Uncommon", "Rare", "Legendary"];
   const PHASES = [
     { name: "Night", icon: "moon", until: 6, evaporation: .57, growth: .36 },
@@ -17,6 +18,13 @@ window.Garden = (() => {
     { name: "Night", icon: "moon", until: 24, evaporation: .57, growth: .36 },
   ];
   const LOCATIONS = ["Shade", "Window", "Grow lamp"];
+  const TREE_BRANCHES = ["Lower left", "Lower right", "Middle left", "Upper right", "Crown"];
+  const BRANCH_LIMIT = 24;
+  const STATION_UPGRADES = {
+    tray: { name: "Humidity tray", cost: 24, stations: [0, 1, 2], description: "Plants here lose humidity 65% more slowly." },
+    curtain: { name: "Shade curtain", cost: 38, stations: [1], description: "Filters afternoon sun for shade-loving plants and slows soil drying." },
+    timer: { name: "Lamp timer", cost: 46, stations: [2], description: "Dims the lamp to window-light levels during the day and slows soil drying." },
+  };
   const CLASSIC_GROUP_SIZE = 5;
   const CLASSIC_SPECIES_COUNT = RARITIES.length * CLASSIC_GROUP_SIZE;
   const WOODY_GROUP_START = 8;
@@ -125,7 +133,7 @@ window.Garden = (() => {
       nextId: 1, inventory: { fertilizer: 2, tonic: 0 }, plants: [], seeds: [], discovered: [],
       history: { recovered: false, bought: false, harvested: false, rareCross: false },
       claimed: [], selected: 1, journal: [],
-      marketPurchases: { window: -1, quantities: {} }, orders: null,
+      marketPurchases: { window: -1, quantities: {} }, orders: null, stationUpgrades: [[], [], []],
     };
     const plant = makePlant(state, "golden", 0, now, "starter");
     state.plants.push(plant);
@@ -148,6 +156,34 @@ window.Garden = (() => {
       (.38 + .62 * plant.health / 100) * (1 + plant.pheno * .055);
   }
 
+  function displayedPlants(state) {
+    return state.plants.filter(plant => plant.onDisplay);
+  }
+
+  function enforceDisplayLimit(state) {
+    const displayed = displayedPlants(state);
+    if (displayed.length <= DISPLAY_LIMIT) return;
+    displayed.sort((a, b) => displayRate(b) - displayRate(a));
+    for (const plant of displayed.slice(DISPLAY_LIMIT)) plant.onDisplay = false;
+  }
+
+  function setDisplay(state, plant, replace) {
+    if (!state.plants.includes(plant)) return false;
+    if (plant.onDisplay && !replace) {
+      plant.onDisplay = false;
+      return true;
+    }
+    if (plant.onDisplay) return false;
+    if (replace) {
+      if (!state.plants.includes(replace) || !replace.onDisplay) return false;
+      replace.onDisplay = false;
+    } else if (displayedPlants(state).length >= DISPLAY_LIMIT) {
+      return false;
+    }
+    plant.onDisplay = true;
+    return true;
+  }
+
   function salePrice(plant) {
     const tier = SPECIES[plant.species].tier;
     return Math.max(2, Math.round([7, 18, 44, 105][tier] *
@@ -166,17 +202,59 @@ window.Garden = (() => {
     };
   }
 
-  function dryingRate(plant, now, location = plant.location) {
-    const species = SPECIES[plant.species];
-    const shapeFactor = species.shape === "succulent" ? .57 : species.shape === "fern" ? 1.21 : 1;
-    return [1.35, 1.85, 2.55, 3.35][species.tier] * phaseAt(now).evaporation * shapeFactor * [.84, 1, 1.17][location];
+  function hasUpgrade(state, location, upgrade) {
+    return state?.stationUpgrades?.[location]?.includes(upgrade) ?? false;
   }
 
-  function movePlant(plant, location, now) {
+  function buyUpgrade(state, location, id) {
+    const upgrade = STATION_UPGRADES[id];
+    if (!upgrade?.stations?.includes(location) || hasUpgrade(state, location, id) || state.coins < upgrade.cost) return false;
+    state.stationUpgrades[location].push(id);
+    state.coins -= upgrade.cost;
+    return true;
+  }
+
+  function curtainClosed(now, location, state) {
+    return location === 1 && hasUpgrade(state, location, "curtain") && phaseAt(now).name === "Afternoon";
+  }
+
+  function lampDimmed(now, location, state) {
+    return location === 2 && hasUpgrade(state, location, "timer") && phaseAt(now).name !== "Night";
+  }
+
+  function lightWorks(plant, now, location = plant.location, state) {
+    const ideal = lightTarget(SPECIES[plant.species], now);
+    return location === ideal ||
+      (ideal === 0 && curtainClosed(now, location, state)) ||
+      (ideal === 1 && lampDimmed(now, location, state));
+  }
+
+  function dryingRate(plant, now, location = plant.location, state) {
+    const species = SPECIES[plant.species];
+    const shapeFactor = species.shape === "succulent" ? .57 : species.shape === "fern" ? 1.21 : 1;
+    const locationFactor = curtainClosed(now, location, state) ? .84 : lampDimmed(now, location, state) ? 1 : [.84, 1, 1.17][location];
+    return [1.35, 1.85, 2.55, 3.35][species.tier] * phaseAt(now).evaporation * shapeFactor * locationFactor;
+  }
+
+  function movePlant(plant, location, now, state) {
     if (!LOCATIONS[location] || plant.location === location) return false;
-    const correctLight = careNeeds(plant, now).light === location;
+    const correctLight = lightWorks(plant, now, location, state);
+    const wasCorrect = lightWorks(plant, now, plant.location, state);
     plant.location = location;
-    plant.health = clamp(plant.health + (correctLight ? 10 : -10), 10);
+    if (!correctLight || !wasCorrect) plant.health = clamp(plant.health + (correctLight ? 10 : -10), 10);
+    return true;
+  }
+
+  function branchAngles(plant) {
+    return TREE_BRANCHES.map((_, i) => {
+      const angle = plant.training?.[i];
+      return Number.isFinite(angle) ? clamp(Math.round(angle), -BRANCH_LIMIT, BRANCH_LIMIT) : 0;
+    });
+  }
+
+  function trainBranches(plant, angles) {
+    if (SPECIES[plant.species].shape !== "tree" || !Array.isArray(angles) || angles.length !== TREE_BRANCHES.length) return false;
+    plant.training = branchAngles({ training: angles });
     return true;
   }
 
@@ -232,9 +310,10 @@ window.Garden = (() => {
         const species = SPECIES[plant.species];
         const tier = species.tier;
         const needs = careNeeds(plant, cursor);
-        const waterLoss = dryingRate(plant, cursor);
+        const waterLoss = dryingRate(plant, cursor, plant.location, state);
         const water = clamp(plant.water - waterLoss * hours / 2);
-        const humidityLoss = [.6, 1.35, 2.3, 3.4][tier] * phase.evaporation;
+        const humidityLoss = [.6, 1.35, 2.3, 3.4][tier] * phase.evaporation *
+          (hasUpgrade(state, plant.location, "tray") ? .35 : 1);
         const humidity = clamp(plant.humidity - humidityLoss * hours / 2);
         const nutrientLoss = [.40, .66, .92, 1.29][tier];
         const nutrients = clamp(plant.nutrients - nutrientLoss * hours / 2);
@@ -242,7 +321,7 @@ window.Garden = (() => {
           (water > needs.wet ? .43 + (water - needs.wet) * .07 : 0) +
           (humidity < needs.humidity ? .4 + (needs.humidity - humidity) * .03 : 0) +
           (nutrients < needs.food ? .22 + tier * .14 : 0) +
-          (plant.location !== needs.light ? [.16, .42, .75, 1.18][tier] : 0);
+          (lightWorks(plant, cursor, plant.location, state) ? 0 : [.16, .42, .75, 1.18][tier]);
         const change = stress ? -stress * (1 + tier * .14) : (plant.health < 90 ? 2.65 : .65);
         const health = clamp(plant.health + change * hours / 2, 10);
         if (plant.onDisplay) state.displayBank += displayRate({ ...plant, health }) * hours;
@@ -424,6 +503,30 @@ window.Garden = (() => {
     return seed;
   }
 
+  function cuttingProblem(plant, now) {
+    if (plant.size < 83) return "Needs 83% growth";
+    if (plant.health < 75) return "Needs 75% health";
+    if ((plant.cutUntil || 0) > now) return "Recovering from its last cutting";
+    return "";
+  }
+
+  function rootingTime(plant) {
+    return [20, 35, 55, 75][SPECIES[plant.species].tier] * MINUTE;
+  }
+
+  function takeCutting(state, plant, now) {
+    if (!state.plants.includes(plant) || freeSlots(state) < 1 || cuttingProblem(plant, now)) return null;
+    const { id, species, pheno } = plant;
+    const cutting = {
+      id: state.nextId++, species, pheno, readyAt: now + rootingTime(plant),
+      source: "cutting", parents: [{ id, species, pheno }],
+    };
+    state.seeds.push(cutting);
+    plant.size -= 8;
+    plant.cutUntil = now + 12 * HOUR;
+    return cutting;
+  }
+
   function potSeed(state, seed, now) {
     if (!seed || seed.readyAt > now || !state.seeds.includes(seed)) return null;
     state.seeds = state.seeds.filter(item => item.id !== seed.id);
@@ -431,7 +534,9 @@ window.Garden = (() => {
     state.journal.unshift({
       id: plant.id, species: plant.species, pheno: plant.pheno, parents: seed.parents || [], pottedAt: now,
       favoredParentId: seed.favoredParentId ?? null,
+      source: seed.source,
     });
+    if (seed.source === "cutting") return plant;
     state.history.harvested = true;
     if (SPECIES[seed.species].tier >= 2) state.history.rareCross = true;
     return plant;
@@ -449,10 +554,12 @@ window.Garden = (() => {
   ];
 
   return {
-    MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, CATALOG, SPECIES, SUPPLIES, GOALS, clamp,
+    MINUTE, HOUR, CROSS_COST, DISPLAY_LIMIT, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES,
+    CATALOG, SPECIES, SUPPLIES, GOALS, clamp,
     phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
+    hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, enforceDisplayLimit, setDisplay,
     pruningReadyAt, canPrune, prunePlant,
     speciesUnlocked, marketStock, nextRestock, buyPlant, rotateOrders, nextOrderDay, orderMatches,
-    toggleOrderPin, deliverOrder, parentProblem, crossPreview, phenotypeOdds, breed, potSeed,
+    toggleOrderPin, deliverOrder, parentProblem, crossPreview, phenotypeOdds, breed, cuttingProblem, rootingTime, takeCutting, potSeed,
   };
 })();
