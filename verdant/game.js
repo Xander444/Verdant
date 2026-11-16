@@ -296,7 +296,7 @@
     return `${hero(now)}
       <div class="greenhouse-grid">
         <section aria-labelledby="care-title">
-          <div class="section-heading"><h2 id="care-title">Plant care</h2><span class="section-note">${icon("clock")} Tracks your local time</span></div>
+          <div class="section-heading"><h2 id="care-title">Plant care</h2></div>
           ${plant ? careView(plant, now) : `<div class="paper empty-state"><span class="tile-icon">${icon("sprout")}</span><h3>Your shelves are ready</h3>
             <p>${canRescue() ? "Adopt a free rescue pothos." : G.freeSlots(state) ? "Find a new plant at the market." : "Your shelf spaces are reserved for plants in the nursery."}</p>
             ${canRescue() ? button("Adopt rescue plant", "rescue", { symbol: "sprout", className: "primary" }) :
@@ -310,7 +310,7 @@
   }
 
   function pageIntro(title, description, symbol, stat = "") {
-    return `<header class="page-intro"><div><span class="page-icon">${icon(symbol)}</span><h1>${title}</h1><p>${description}</p></div>${stat}</header>`;
+    return `<header class="page-intro intro-${symbol}"><div><span class="page-icon">${icon(symbol)}</span><h1>${title}</h1><p>${description}</p></div>${stat}</header>`;
   }
 
   function rarityFilter(name, selected) {
@@ -345,7 +345,7 @@
             <div class="catalog-art rarity-back-${species.tier}">${tierBadge(species)}${canvas(species, { size: 59 })}</div>
             <div class="catalog-copy"><h3>${species.name}</h3><p>${species.note}</p>
             ${species.tier ? `<p class="stock-label ${quantity ? "in-stock" : ""}"><i></i>${quantity ? `${quantity} in stock` : "Out of stock"}</p>` : ""}
-            ${button(`Buy ${coins(species.price)}`, "buy-plant", {
+            ${button(`Buy <span class="catalog-price">${coins(species.price)}</span>`, "buy-plant", {
               className: "catalog-button", extra: `data-id="${species.id}" aria-label="Buy ${species.name} for ${species.price} coins"`,
               disabled: !quantity || !open || state.coins < species.price,
             })}</div>
