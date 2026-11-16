@@ -6,6 +6,8 @@ window.Garden = (() => {
   const HOUR = 60 * MINUTE;
   const RESTOCK_INTERVAL = 5 * MINUTE;
   const CROSS_COST = 5;
+  const INHERITED_TRAIT_CHANCE = .62;
+  const FAVOR_WEIGHT = .80;
   const RARITIES = ["Common", "Uncommon", "Rare", "Legendary"];
   const PHASES = [
     { name: "Night", icon: "moon", until: 6, evaporation: .57, growth: .36 },
@@ -17,11 +19,12 @@ window.Garden = (() => {
   const LOCATIONS = ["Shade", "Window", "Grow lamp"];
   const CLASSIC_GROUP_SIZE = 5;
   const CLASSIC_SPECIES_COUNT = RARITIES.length * CLASSIC_GROUP_SIZE;
+  const WOODY_GROUP_START = 8;
   const MARKET_PRICES = [
-    [13, 16, 17, 19, 21, 17, 20, 22],
-    [38, 43, 48, 53, 58, 46, 55, 62],
-    [105, 118, 131, 144, 157, 123, 149, 164],
-    [275, 305, 335, 365, 395, 345, 380, 425],
+    [13, 16, 17, 19, 21, 17, 20, 22, 24, 21],
+    [38, 43, 48, 53, 58, 46, 55, 62, 59, 66],
+    [105, 118, 131, 144, 157, 123, 149, 164, 170, 155],
+    [275, 305, 335, 365, 395, 345, 380, 425, 430, 450],
   ];
   const GROUPS = [
     [
@@ -33,6 +36,8 @@ window.Garden = (() => {
       ["peperomia", "Coin Peperomia", "succulent", "#477e6b", ["Rain Coin", "Red Rim", "Lime Coin"], "Plump round leaves hold a glossy sheen."],
       ["wax", "Wax Begonia", "bush", "#856459", ["Bronze Leaf", "Green Wax", "Rose Wash"], "Small bronze leaves cluster into a tidy mound."],
       ["swedish", "Swedish Ivy", "trailing", "#3e8156", ["Bright Green", "White Ruffle", "Copper Margin", "Lemon Ruffle"], "Rounded scalloped leaves spill over the pot."],
+      ["ficus", "Ficus Bonsai", "tree", "#588051", ["Glossy Green", "Lemon Tip", "Cream Edge", "Copper Leaf"], "Glossy little leaves sit above a thick, curved trunk."],
+      ["umbrella", "Dwarf Umbrella Tree", "tree", "#4e805a", ["Emerald Fan", "Gold Fan", "Pearl Edge", "Jade Splash"], "Fans of rounded leaflets gather at the ends of its branches."],
     ],
     [
       ["polka", "Polka Dot Plant", "bush", "#9f5769", ["Blush", "White Confetti", "Berry Freckle", "Ruby Dots"], "Freckled leaves with a painterly finish."],
@@ -43,6 +48,8 @@ window.Garden = (() => {
       ["nerve", "Nerve Plant", "bush", "#66846a", ["White Net", "Pink Net", "Crimson Net", "Lime Thread", "Snow Net"], "A fine mesh of bright veins covers the foliage."],
       ["rex", "Rex Begonia", "shield", "#765466", ["Silver Spiral", "Burgundy Swirl", "Mint Rim", "Rose Ring", "Mosaic"], "Broad leaves carry rings of purple and silver."],
       ["ponytail", "Ponytail Palm", "grass", "#718c56", ["Long Curl", "Gold Ribbon", "Seafoam", "Silver Curl"], "Long, narrow leaves arch out from the center."],
+      ["elm", "Chinese Elm Bonsai", "tree", "#647d42", ["Silk Green", "Amber Tips", "Silver Tooth", "Sage Lace", "Spring Chartreuse"], "Small toothed leaves form a dense canopy over its zigzag trunk."],
+      ["pomegranate", "Dwarf Pomegranate", "tree", "#647d4f", ["Scarlet Bloom", "Coral Bloom", "Ivory Bloom", "Copper Leaf", "Apricot Bloom"], "Warm-colored blooms stand out along the woody branches."],
     ],
     [
       ["pink", "Pink Princess", "shield", "#385e43", ["Rose Sector", "Dark Cherry", "Bubblegum", "Marble Rose", "Cream Flame"], "Rose-colored patches break up its deep green leaves."],
@@ -53,6 +60,8 @@ window.Garden = (() => {
       ["satin", "Silver Satin Pothos", "trailing", "#729789", ["Silver Splash", "Moon Stripe", "Sea Glass", "Fine Dust", "Pearl Rim", "Ice Patch"], "Pale satin flecks shine against trailing green leaves."],
       ["strawberry", "Strawberry Begonia", "succulent", "#936870", ["Ruby Runner", "Blush Ring", "Ivory Edge", "Velvet Red", "Mint Fan"], "Rosy runners carry small rounded leaves."],
       ["painted", "Painted Lady Philodendron", "shield", "#88a452", ["Watercolor", "Lime Speckle", "Pink Stem", "Cream Splash", "Olive Brush", "Golden Brush"], "Yellow-green strokes mark its pointed leaves."],
+      ["maple", "Japanese Maple Bonsai", "tree", "#94554f", ["Crimson Star", "Copper Flame", "Golden Star", "Rose Ember", "Wine Veil", "Spring Jade"], "Lobed leaves spread out over delicate branches."],
+      ["olive", "Olive Bonsai", "tree", "#7d8b70", ["Silver Grove", "Sage Twist", "Gold Edge", "Deep Olive", "Winter Mist"], "A broad trunk supports narrow leaves with silvery undersides."],
     ],
     [
       ["constellation", "Thai Constellation", "monstera", "#4d783f", ["Star Map", "Milky Way", "Cream Sector", "Lime Galaxy", "White Nova", "Mint Orbit", "Sunspot", "Silver Comet"], "Split leaves carry constellations of pale speckles."],
@@ -63,6 +72,8 @@ window.Garden = (() => {
       ["queen", "Queen Anthurium", "shield", "#304f42", ["Silver Crown", "Night Vein", "Gold Thread", "Ivory Crown", "Black Velvet", "Pale Jade", "Rose Vein"], "Long velvety leaves carry a central vein like silver thread."],
       ["echeveria", "Ghost Echeveria", "succulent", "#a0a6a4", ["Moon Dust", "Lavender Frost", "Mint Glass", "Rose Tips", "Pearl Mist", "Ice Blue", "Sunset Rim"], "Powdery leaves form a pale, tightly layered rosette."],
       ["aurora", "Aurora Tradescantia", "trailing", "#785783", ["Borealis", "Pink Sky", "Violet Dawn", "Silver Ribbon", "Lime Haze", "Dusk Stripe", "Rose Aurora", "White Night"], "Stripes of lilac and green wind down its stems."],
+      ["wisteria", "Wisteria Bonsai", "tree", "#8175a0", ["Lilac Cascade", "White Rain", "Violet Silk", "Blush Cascade", "Midnight Grape", "Blue Veil", "Pearl Lilac"], "Pendant clusters hang beneath a spreading crown."],
+      ["juniper", "Moonlight Juniper", "tree", "#62877c", ["Moon Silver", "Blue Needle", "Winter Jade", "Silver Cloud", "Gold Mist", "Frost Tip", "Deep Pine", "Ghost Teal"], "Silvery needles gather in small clouds above an angled trunk."],
     ],
   ].map((entries, tier) => entries.map(([id, name, shape, color, phenotypes, note], position) => ({
     id, name, shape, color, phenotypes, note, tier, position, price: MARKET_PRICES[tier][position],
@@ -186,6 +197,24 @@ window.Garden = (() => {
       const bonus = manual && plant.water >= range.min && plant.water <= range.max ? 3 : 0;
       plant.health = clamp(plant.health + 17 + bonus);
     }
+  }
+
+  function pruningReadyAt(plant) {
+    return plant.prunedAt === null ? 0 : plant.prunedAt + 12 * HOUR;
+  }
+
+  function canPrune(plant, now) {
+    return pruningReadyAt(plant) <= now && (plant.quality < 5 || plant.health < 85);
+  }
+
+  function prunePlant(plant, now, manual = false) {
+    if (!canPrune(plant, now)) return false;
+    plant.health = clamp(plant.health + (plant.health < 72 ? 10 : 3));
+    plant.quality = Math.min(5, plant.quality + 1);
+    const trim = manual ? 1 : 3;
+    plant.size -= Math.min(trim, Math.max(0, plant.size - 8));
+    plant.prunedAt = now;
+    return true;
   }
 
   function advance(state, now) {
@@ -347,26 +376,48 @@ window.Garden = (() => {
     const [low, high] = [x.position, y.position].sort((l, r) => l - r);
     const group = GROUPS[x.tier + 1];
     const variety = low + 2 * high - 1;
-    const position = high < CLASSIC_GROUP_SIZE ? variety % CLASSIC_GROUP_SIZE :
-      CLASSIC_GROUP_SIZE + variety % (group.length - CLASSIC_GROUP_SIZE);
-    return group[position];
+    // Keep prior recipes within their original set of possible offspring.
+    const start = high < CLASSIC_GROUP_SIZE ? 0 : high < WOODY_GROUP_START ? CLASSIC_GROUP_SIZE : WOODY_GROUP_START;
+    const end = start === 0 ? CLASSIC_GROUP_SIZE : start === CLASSIC_GROUP_SIZE ? WOODY_GROUP_START : group.length;
+    return group[start + variety % (end - start)];
   }
 
-  function breed(state, a, b, now, random = Math.random) {
+  function favoredTraitParent(a, b, requestedId) {
+    if (a.species !== b.species || a.pheno === b.pheno) return null;
+    return requestedId === a.id || requestedId === b.id ? requestedId : null;
+  }
+
+  function firstParentWeight(a, favoredId) {
+    return favoredId === null ? .5 : favoredId === a.id ? FAVOR_WEIGHT : 1 - FAVOR_WEIGHT;
+  }
+
+  function phenotypeOdds(a, b, requestedId) {
+    if (a.species !== b.species) return [];
+    const count = SPECIES[a.species].phenotypes.length;
+    const base = (1 - INHERITED_TRAIT_CHANCE) / count;
+    const odds = Array(count).fill(base);
+    const weight = firstParentWeight(a, favoredTraitParent(a, b, requestedId));
+    odds[a.pheno] += INHERITED_TRAIT_CHANCE * weight;
+    odds[b.pheno] += INHERITED_TRAIT_CHANCE * (1 - weight);
+    return odds;
+  }
+
+  function breed(state, a, b, now, random = Math.random, requestedId = null) {
     if (!a || !b || a.id === b.id || freeSlots(state) < 1 || state.coins < CROSS_COST ||
         parentProblem(a, now) || parentProblem(b, now)) return null;
     const target = crossPreview(a, b);
     const chance = random();
-    const inherited = random() < .5 ? a : b;
+    const favoredParentId = favoredTraitParent(a, b, requestedId);
+    const inherited = random() < firstParentWeight(a, favoredParentId) ? a : b;
     const species = target && chance < .72 ? target : SPECIES[inherited.species];
     const matchingParents = [a, b].filter(plant => plant.species === species.id);
     const chosen = matchingParents.length === 2 ? inherited : matchingParents[0];
-    const pheno = chosen && random() < .62
+    const pheno = chosen && random() < INHERITED_TRAIT_CHANCE
       ? chosen.pheno
       : Math.floor(random() * species.phenotypes.length);
     const duration = [4, 6, 10, 16][species.tier] * MINUTE;
     const parents = [a, b].map(({ id, species, pheno }) => ({ id, species, pheno }));
-    const seed = { id: state.nextId++, species: species.id, pheno, readyAt: now + duration, parents };
+    const seed = { id: state.nextId++, species: species.id, pheno, readyAt: now + duration, parents, favoredParentId };
     state.seeds.push(seed);
     state.coins -= CROSS_COST;
     a.bredUntil = b.bredUntil = now + duration + 3 * MINUTE;
@@ -379,6 +430,7 @@ window.Garden = (() => {
     const plant = addPlant(state, seed.species, seed.pheno, now, "seedling");
     state.journal.unshift({
       id: plant.id, species: plant.species, pheno: plant.pheno, parents: seed.parents || [], pottedAt: now,
+      favoredParentId: seed.favoredParentId ?? null,
     });
     state.history.harvested = true;
     if (SPECIES[seed.species].tier >= 2) state.history.rareCross = true;
@@ -392,13 +444,15 @@ window.Garden = (() => {
     { name: "New roots", description: "Pot your first seedling in the breeding room.", reward: 18, test: s => s.history.harvested },
     { name: "A rare discovery", description: "Breed a Rare or Legendary plant.", reward: 40, test: s => s.history.rareCross },
     { name: "An established collection", description: "Discover 20 plant species.", reward: 150, test: s => discoveredCount(s) >= CLASSIC_SPECIES_COUNT },
-    { name: "The complete collection", description: "Discover all " + CATALOG.length + " plant species.", reward: 200, test: s => discoveredCount(s) === CATALOG.length },
+    { name: "An expanded collection", description: "Discover 32 plant species.", reward: 200, test: s => discoveredCount(s) >= RARITIES.length * WOODY_GROUP_START },
+    { name: "The complete collection", description: "Discover all " + CATALOG.length + " plant species.", reward: 250, test: s => discoveredCount(s) === CATALOG.length },
   ];
 
   return {
     MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, CATALOG, SPECIES, SUPPLIES, GOALS, clamp,
     phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
+    pruningReadyAt, canPrune, prunePlant,
     speciesUnlocked, marketStock, nextRestock, buyPlant, rotateOrders, nextOrderDay, orderMatches,
-    toggleOrderPin, deliverOrder, parentProblem, crossPreview, breed, potSeed,
+    toggleOrderPin, deliverOrder, parentProblem, crossPreview, phenotypeOdds, breed, potSeed,
   };
 })();

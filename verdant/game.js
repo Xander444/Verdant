@@ -11,6 +11,7 @@
   const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
   const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
   const numberFormat = new Intl.NumberFormat();
+  const oddsFormat = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 1 });
   const paths = {
     sprout: '<path d="M12 22v-9m0 2C5 15 3 11 3 6c5 0 9 3 9 9Zm0 1c0-7 3-11 9-12 1 6-2 11-9 12Z"/>',
     home: '<path d="M3 10 12 3l9 7v11H3Zm6 11v-7h6v7M12 3v5"/>',
@@ -59,8 +60,8 @@
   const currentPage = () => ["greenhouse", "market", "orders", "breeding", "guide"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "greenhouse";
   const button = (label, action, { symbol, extra = "", className = "", disabled = false } = {}) =>
     `<button type="button" class="button ${className}" data-action="${action}" ${extra}${disabled ? " disabled" : ""}>${symbol ? icon(symbol) : ""}${label}</button>`;
-  const canvas = (species, { pheno = 0, size = 58, health = 95, large = false } = {}) =>
-    `<canvas class="plant-art" width="${large ? 680 : 340}" height="${large ? 610 : 305}" data-species="${species.id}" data-pheno="${pheno}" data-size="${percent(size)}" data-health="${percent(health)}" aria-hidden="true"></canvas>`;
+  const canvas = (species, { pheno = 0, size = 58, health = 95, quality = 0, large = false } = {}) =>
+    `<canvas class="plant-art" width="${large ? 680 : 340}" height="${large ? 610 : 305}" data-species="${species.id}" data-pheno="${pheno}" data-size="${percent(size)}" data-health="${percent(health)}" data-quality="${quality}" aria-hidden="true"></canvas>`;
 
   let state;
   let lastSaved;
@@ -68,7 +69,8 @@
   let toastTimer;
   let draggedPlant;
   let pouring;
-  let view = { marketFilter: "all", guideFilter: "all", parentA: "", parentB: "" };
+  let pruning;
+  let view = { marketFilter: "all", guideFilter: "all", parentA: "", parentB: "", favoredParent: "" };
 
   function syncSave() {
     try {
@@ -155,10 +157,10 @@
   function controlsFor(plant, now) {
     const needs = G.careNeeds(plant, now);
     const canWater = plant.water <= Math.min(needs.dry + 10, 60);
-    const timers = { prune: plant.prunedAt === null ? 0 : plant.prunedAt + 12 * HOUR, feed: plant.fedAt === null ? 0 : plant.fedAt + 6 * HOUR,
+    const timers = { prune: G.pruningReadyAt(plant), feed: plant.fedAt === null ? 0 : plant.fedAt + 6 * HOUR,
       mist: plant.mistedAt === null ? 0 : plant.mistedAt + HOUR, tonic: plant.tonicAt === null ? 0 : plant.tonicAt + 2 * HOUR };
     return {
-      water: canWater, prune: timers.prune <= now && (plant.quality < 5 || plant.health < 85),
+      water: canWater, prune: G.canPrune(plant, now),
       feed: timers.feed <= now && state.inventory.fertilizer > 0 && plant.nutrients < 84,
       mist: timers.mist <= now && plant.humidity < 83,
       tonic: timers.tonic <= now && state.inventory.tonic > 0 && plant.health < 94,
@@ -385,15 +387,36 @@
             const species = SPECIES[parent.species];
             return `<span><strong>${species.name}</strong> <small>#${parent.id} · ${species.phenotypes[parent.pheno]}</small></span>`;
           }).join("<span aria-hidden=\"true\">×</span>");
+          const favorite = entry.parents.find(parent => parent.id === entry.favoredParentId);
           const canReuse = entry.parents.length === 2 && entry.parents.every(parent => state.plants.some(plant => plant.id === parent.id));
           return `<article class="paper journal-row">
             <span class="shelf-preview">${canvas(child, { pheno: entry.pheno, size: 38 })}</span>
             <div><h3>${child.name}</h3><p>${child.phenotypes[entry.pheno]} · ${dateFormat.format(entry.pottedAt)}</p>
+              ${favorite ? `<span class="journal-favorite">${icon("leaf")} Favored ${SPECIES[favorite.species].phenotypes[favorite.pheno]} · #${favorite.id}</span>` : ""}
               <div class="journal-parents">${pair || "Parents unavailable"}</div></div>
             ${canReuse ? button("Use this pair", "reuse-parents", { symbol: "dna", className: "compact", extra: `data-id="${entry.id}"` }) :
               entry.parents.length ? '<small class="journal-unavailable">Pair no longer on shelves</small>' : ""}
           </article>`;
         }).join("")}</div>`}
+    </section>`;
+  }
+
+  function traitPicker(a, b) {
+    const species = SPECIES[a.species];
+    const distinct = a.pheno !== b.pheno;
+    const favored = distinct && [String(a.id), String(b.id)].includes(view.favoredParent)
+      ? Number(view.favoredParent) : null;
+    const odds = G.phenotypeOdds(a, b, favored);
+    const preferred = [a, b].find(parent => parent.id === favored);
+    const choices = distinct ? `<fieldset class="trait-choices"><legend>Favor a phenotype</legend>
+      <div>${[[null, "Balanced"], [a.id, species.phenotypes[a.pheno]], [b.id, species.phenotypes[b.pheno]]].map(([id, name]) =>
+        `<label><input type="radio" id="trait-${id ?? "balanced"}" name="trait" data-filter="favoredParent" value="${id ?? ""}"${id === favored ? " checked" : ""}>
+          <span>${name}</span></label>`).join("")}</div></fieldset>` : "";
+    return `<section class="trait-panel" aria-label="Phenotype options">
+      ${choices}
+      <h3>Seedling odds</h3>
+      <ul class="trait-odds">${species.phenotypes.map((name, i) =>
+        `<li${preferred?.pheno === i ? ' class="favored"' : ""}><span>${name}</span><strong>${oddsFormat.format(odds[i])}</strong></li>`).join("")}</ul>
     </section>`;
   }
 
@@ -431,6 +454,7 @@
         <section class="paper cross-card"><div class="section-heading"><h2>Choose parents</h2><span class="count-pill">${coins(G.CROSS_COST)} per cross</span></div>
           <div class="parents">${parentSlot("parentA", "First parent", a, b)}<span class="cross-plus">${icon("plus")}</span>${parentSlot("parentB", "Second parent", b, a)}</div>
           <div class="cross-note">${icon("info")}<p>${crossNote}</p></div>
+          ${valid && a.species === b.species ? traitPicker(a, b) : ""}
           ${cause ? `<p class="breeding-warning">${cause}</p>` : ""}
           ${button("Start cross", "breed", { symbol: "dna", className: "primary", disabled: !valid || Boolean(cause) })}
         </section>
@@ -642,6 +666,52 @@
       plant.water >= min && plant.water <= max ? "Watered into the target range." : `Watered to ${percent(plant.water)}%.`;
   }
 
+  function showPruning(plant) {
+    const species = SPECIES[plant.species];
+    const nextShape = Math.min(5, plant.quality + 1);
+    const shape = nextShape > plant.quality ? `Shape ${plant.quality}/5 → ${nextShape}/5` : `Shape ${plant.quality}/5`;
+    openDialog(`Prune ${species.name}`, `<div class="prune-panel">
+      <p>Snip each marked leaf, then finish pruning. Trimming by hand keeps more of the plant’s growth.</p>
+      <div class="prune-scene"><div class="prune-art">${canvas(species, { ...plant, large: true })}<div data-prune-targets></div></div></div>
+      <div class="prune-readout"><strong>${shape}</strong><span data-prune-progress role="status"></span></div>
+      <div class="prune-actions">
+        ${button("Finish pruning", "finish-prune", { symbol: "prune", className: "primary", disabled: true })}
+        ${button("Quick prune", "quick-prune")}
+      </div>
+    </div>`);
+    const panel = dialog.querySelector(".prune-panel");
+    const art = panel.querySelector("canvas");
+    const removed = new Set();
+    const targets = window.PlantArt.draw(art, removed) || [];
+    pruning = { plantId: plant.id, panel, art, removed, total: targets.length };
+    panel.querySelector("[data-prune-targets]").innerHTML = targets.map((target, index) =>
+      `<button class="snip-target" type="button" data-snip="${target.id}"
+        style="--x:${(target.x / 340 * 100).toFixed(2)}%;--y:${(target.y / 305 * 100).toFixed(2)}%"
+        aria-label="Snip leaf ${index + 1}">${icon("prune")}</button>`).join("");
+    showPruneProgress();
+  }
+
+  function showPruneProgress() {
+    const { panel, removed, total } = pruning;
+    const done = total > 0 && removed.size === total;
+    panel.querySelector("[data-prune-progress]").textContent = total ? `${removed.size} / ${total} leaves trimmed` :
+      "Quick prune is available.";
+    const finish = panel.querySelector('[data-action="finish-prune"]');
+    finish.disabled = !done;
+    return finish;
+  }
+
+  function trimLeaf(target) {
+    if (!pruning || !pruning.panel.contains(target) || target.hidden) return;
+    const { art, panel, removed } = pruning;
+    removed.add(Number(target.dataset.snip));
+    window.PlantArt.draw(art, removed);
+    const restoreFocus = document.activeElement === target;
+    target.hidden = true;
+    const finish = showPruneProgress();
+    if (restoreFocus) (panel.querySelector("[data-snip]:not([hidden])") || finish).focus({ preventScroll: true });
+  }
+
   function chooseDelivery(order) {
     const options = state.plants.filter(plant => G.orderMatches(order, plant)).map(plant => {
       const species = SPECIES[plant.species];
@@ -666,12 +736,6 @@
         G.waterPlant(plant, Math.min(amount, needs.wet - 4 - plant.water), now);
         return "Plant watered.";
       }
-      case "prune":
-        increase("health", plant.health < 72 ? 10 : 3);
-        plant.quality = Math.min(5, plant.quality + 1);
-        increase("size", -Math.min(3, Math.max(0, plant.size - 8)));
-        plant.prunedAt = now;
-        return "Plant pruned. A better shape raises its value.";
       case "feed":
         state.inventory.fertilizer--;
         plant.fedAt = now;
@@ -721,8 +785,19 @@
       case "watering-can":
         if (plant) showWatering(plant, now);
         return;
-      case "water":
       case "prune":
+        if (plant && G.canPrune(plant, now)) showPruning(plant);
+        return;
+      case "quick-prune":
+      case "finish-prune": {
+        const manual = action === "finish-prune";
+        if (!pruning || (manual && (!pruning.total || pruning.removed.size !== pruning.total))) return;
+        const trimmed = state.plants.find(item => item.id === pruning.plantId);
+        dialog.close();
+        if (!trimmed || !G.prunePlant(trimmed, now, manual)) return "This plant is unavailable for pruning.";
+        return `${SPECIES[trimmed.species].name} pruned. Shape ${trimmed.quality}/5.`;
+      }
+      case "water":
       case "feed":
       case "mist":
       case "tonic":
@@ -804,8 +879,8 @@
       case "breed": {
         const a = state.plants.find(item => String(item.id) === view.parentA);
         const b = state.plants.find(item => String(item.id) === view.parentB);
-        if (!G.breed(state, a, b, now)) return "This pair is unavailable for breeding right now.";
-        view.parentA = view.parentB = "";
+        if (!G.breed(state, a, b, now, Math.random, Number(view.favoredParent) || null)) return "This pair is unavailable for breeding right now.";
+        view.parentA = view.parentB = view.favoredParent = "";
         return "Cross started. Check the seed tray for progress.";
       }
       case "reuse-parents": {
@@ -814,6 +889,7 @@
           return "This pair is no longer on your shelves.";
         }
         [view.parentA, view.parentB] = entry.parents.map(parent => String(parent.id));
+        view.favoredParent = entry.favoredParentId ? String(entry.favoredParentId) : "";
         requestAnimationFrame(() => {
           const firstParent = document.querySelector("#parentA");
           firstParent?.focus({ preventScroll: true });
@@ -874,12 +950,18 @@
     endPour(true);
   });
   dialog.addEventListener("click", event => {
+    const leaf = event.target.closest("[data-snip]");
+    if (leaf) trimLeaf(leaf);
     const toggle = event.target.closest("[data-pour-toggle]");
     if (!toggle || toggle.disabled) return;
     if (pouring) endPour(true);
     else beginPour(toggle.closest(".water-panel"), "toggle");
   });
-  dialog.addEventListener("close", () => endPour(false));
+  dialog.addEventListener("close", () => {
+    if (dialog.open) return;
+    endPour(false);
+    pruning = undefined;
+  });
   window.addEventListener("blur", () => endPour(false));
 
   function clearDrag() {
@@ -928,6 +1010,7 @@
     const { filter } = event.target.dataset;
     if (!filter || !Object.hasOwn(view, filter)) return;
     view[filter] = event.target.value;
+    if (filter === "parentA" || filter === "parentB") view.favoredParent = "";
     render();
   });
 

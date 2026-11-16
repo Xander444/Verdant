@@ -306,6 +306,7 @@ select { width: 100%; background: var(--paper); border: 1px solid #d9e2d5; borde
 .journal-row p, .journal-unavailable { color: var(--muted); font-size: .76rem; }
 .journal-parents { display: flex; flex-wrap: wrap; align-items: center; gap: 0 7px; margin-top: 4px; color: #465d47; font-size: .79rem; }
 .journal-parents small { color: var(--muted); }
+.journal-favorite { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--green); font-size: .73rem; font-weight: 650; }
 .guide-count { display: grid; flex-shrink: 0; color: #49644c; text-align: right; font-size: .78rem; }
 .guide-count strong { color: #2e5438; font: 500 36px/1.15 var(--serif); }
 .breeding-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 15px; margin-top: 18px; align-items: start; }
@@ -320,6 +321,23 @@ select { width: 100%; background: var(--paper); border: 1px solid #d9e2d5; borde
 .cross-plus { display: grid; place-items: center; color: var(--green); }
 .cross-note { display: flex; align-items: flex-start; gap: 8px; padding: 10px; margin: 14px 0 10px; background: #edf0e4; color: #465b48; border-radius: 8px; font-size: .83rem; }
 .cross-note svg { margin-top: 2px; }
+.trait-panel { margin: 10px 0 13px; padding: 11px; border: 1px solid #e1e7d9; border-radius: 9px; background: #f8faf2; }
+.trait-choices { padding: 0; margin: 0 0 10px; border: 0; }
+.trait-choices legend, .trait-panel h3 { margin: 0 0 5px; font: 700 .83rem/1.4 var(--sans); letter-spacing: normal; }
+.trait-choices > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.trait-choices label {
+  display: flex; align-items: center; gap: 5px; min-height: 34px; padding: 4px 7px; color: #486044;
+  border: 1px solid #dce4d5; border-radius: 7px; background: var(--paper); font-size: .77rem; cursor: pointer;
+}
+.trait-choices label:has(input:checked) { background: #e8f1e3; border-color: #96af8e; }
+.trait-choices input { margin: 0; accent-color: #3e6d4c; }
+.trait-odds { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 5px; margin: 0; padding: 0; list-style: none; }
+.trait-odds li {
+  display: flex; align-items: center; justify-content: space-between; gap: 7px; min-width: 0;
+  padding: 5px 7px; color: var(--muted); border-radius: 6px; background: #edf0e6; font-size: .74rem;
+}
+.trait-odds li.favored { color: #31563c; background: #ddebd5; }
+.trait-odds strong { flex-shrink: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
 .breeding-warning { color: #80551e; margin-bottom: 10px; font-size: .81rem; }
 .nursery-empty { display: grid; justify-items: center; text-align: center; gap: 7px; padding: 28px 12px 27px; border: 1px dashed #dbe2d4; border-radius: 10px; }
 .nursery-empty h3, .seed-row h3 { font-size: 21px; }
@@ -342,6 +360,21 @@ dialog::backdrop { background: #162c20a6; }
 .move-options { display: grid; gap: 7px; margin-top: 12px; }
 .move-options button { justify-content: flex-start; gap: 8px; }
 .move-options button.recommended { border-color: #89a787; }
+.prune-scene {
+  display: grid; place-items: center; margin: 11px 0; border: 1px solid #e0e7d6; border-radius: 10px;
+  background: radial-gradient(ellipse at 40% 10%, #f5f0d6, transparent 68%), linear-gradient(#e6ecdc 76%, #dbe4d1 76%);
+}
+.prune-art { position: relative; width: min(100%, 340px); }
+.snip-target {
+  position: absolute; z-index: 1; left: var(--x); top: var(--y); transform: translate(-50%, -50%);
+  display: grid; place-items: center; width: 33px; height: 33px; padding: 0; border-radius: 50%;
+  border: 1px solid #9a793f; background: #fff6dbed; color: #7d5428; box-shadow: 0 0 0 3px #fff7d370;
+}
+.snip-target:hover, .snip-target:focus-visible { background: #fcdf97; }
+.snip-target svg { width: 15px; height: 15px; }
+.prune-readout { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .8rem; color: var(--muted); }
+.prune-readout strong { color: var(--ink); }
+.prune-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
 .water-scene {
   position: relative; overflow: hidden; display: grid; justify-items: center; align-items: end; height: 148px; margin: 1px 0 11px;
   border: 1px solid #e1e7d9; border-radius: 10px;

@@ -32,7 +32,19 @@ window.PlantArt = (() => {
     ctx.rotate(angle);
     ctx.beginPath();
     ctx.moveTo(0, 1);
-    if (["heart", "trailing", "monstera", "shield"].includes(style)) {
+    if (style === "maple") {
+      ctx.lineTo(-width * .67, -length * .25);
+      ctx.lineTo(-width, -length * .54);
+      ctx.lineTo(-width * .44, -length * .49);
+      ctx.lineTo(-width * .63, -length * .81);
+      ctx.lineTo(-width * .23, -length * .7);
+      ctx.lineTo(0, -length);
+      ctx.lineTo(width * .24, -length * .71);
+      ctx.lineTo(width * .66, -length * .82);
+      ctx.lineTo(width * .46, -length * .49);
+      ctx.lineTo(width, -length * .52);
+      ctx.lineTo(width * .64, -length * .25);
+    } else if (["heart", "trailing", "monstera", "shield"].includes(style)) {
       ctx.bezierCurveTo(-width * .42, -length * .23, -width, length * .02, -width, -length * .38);
       ctx.bezierCurveTo(-width, -length * .61, -width * .31, -length * .79, 0, -length);
       ctx.bezierCurveTo(width * .31, -length * .82, width * 1.08, -length * .58, width, -length * .36);
@@ -99,7 +111,58 @@ window.PlantArt = (() => {
     ctx.stroke();
   }
 
-  function drawCanopy(ctx, species, plant) {
+  const treeForms = {
+    ficus: { spread: .96, height: .94, lean: 9, length: 35, width: .32, leaves: 8, style: "bush" },
+    umbrella: { spread: .82, height: 1.06, lean: -8, length: 40, width: .28, leaves: 6, style: "succulent" },
+    elm: { spread: .94, height: .99, lean: 16, length: 27, width: .31, leaves: 11, style: "bush" },
+    pomegranate: { spread: 1.04, height: .89, lean: -9, length: 32, width: .28, leaves: 9, style: "bush" },
+    maple: { spread: 1.16, height: 1, lean: -15, length: 36, width: .43, leaves: 9, style: "maple" },
+    olive: { spread: 1.03, height: .91, lean: 8, length: 37, width: .2, leaves: 10, style: "spear" },
+    wisteria: { spread: 1.14, height: 1.07, lean: 11, length: 37, width: .29, leaves: 10, style: "flower" },
+    juniper: { spread: 1.02, height: .87, lean: 25, length: 25, width: .15, leaves: 14, style: "spear" },
+  };
+
+  function drawTree(ctx, species, plant, colors, random, drawLeaf) {
+    const form = treeForms[species.id];
+    const trunk = ctx.createLinearGradient(-10, 0, 12, -4);
+    trunk.addColorStop(0, "#503d30");
+    trunk.addColorStop(.45, "#a17c55");
+    trunk.addColorStop(1, "#67472f");
+    const top = form.height * 126;
+    ctx.beginPath();
+    ctx.moveTo(-12, 5);
+    ctx.bezierCurveTo(-8, -19, -15, -48, form.lean * .32, -66);
+    ctx.bezierCurveTo(form.lean * .77, -93, form.lean - 4, -top + 13, form.lean, -top);
+    ctx.bezierCurveTo(form.lean + 5, -top + 9, form.lean + 5, -96, form.lean * .38 + 9, -66);
+    ctx.bezierCurveTo(-1, -43, 3, -18, 13, 5);
+    ctx.closePath();
+    ctx.fillStyle = trunk;
+    ctx.fill();
+    stem(ctx, -9, 1, -25, 7, -10, "#896346", 3.6);
+    stem(ctx, 9, 0, 22, 6, 9, "#775436", 3.4);
+    const crowns = [[-77, -64], [65, -77], [-51, -100], [43, -117], [-4, -143]];
+    const spread = form.spread * (1 - .033 * plant.quality);
+    const tips = crowns.map(([x, y]) => [x * spread + form.lean * .64, y * form.height]);
+    tips.forEach(([x, y], i) => stem(ctx, (i + 1) * form.lean / 8, y + 20, x, y, x * .32, "#765138", 5 - i * .53));
+    const count = form.leaves + Math.floor(plant.quality / 2);
+    for (const [x, y] of tips) {
+      for (let i = 0; i < count; i++) {
+        const offset = (i / (count - 1) - .5) * 44;
+        const sway = (random() - .5) * 14;
+        const pendant = species.id === "wisteria" && i % 2 === 0;
+        const angle = (pendant ? Math.PI : 0) + offset * .037 + sway * .012;
+        const length = form.length * (.72 + random() * .40);
+        const leafY = y + sway + (pendant ? 6 : 0);
+        const texture = generator(Math.floor(random() * 4294967296));
+        drawLeaf(ctx, x + offset, leafY, angle, length, length * form.width, form.style, colors, texture, plant.pheno > 0);
+        if (species.id === "pomegranate" && i % 4 === 0) {
+          ellipse(ctx, x + offset * .85, leafY - 16, 4, 4, rgb(mix([199, 89, 68], colors[3], plant.pheno * .12)));
+        }
+      }
+    }
+  }
+
+  function drawCanopy(ctx, species, plant, drawLeaf) {
     const random = generator(species.position * 183 + species.tier * 41 + 17 + plant.pheno * 43);
     const base = hex(species.color);
     const variant = ink.variants[plant.pheno % ink.variants.length];
@@ -109,6 +172,10 @@ window.PlantArt = (() => {
     const foliage = mix(mix(base, variant, variantTint), ink.dry, wilt * .46);
     const colors = [foliage, mix(foliage, ink.light, .4 + wilt * .11), mix(foliage, ink.dark, .56), variant];
     const shape = species.shape;
+    if (shape === "tree") {
+      drawTree(ctx, species, plant, colors, random, drawLeaf);
+      return;
+    }
     if (species.id === "echeveria") {
       const rings = [[0, 11, 79], [1.5, 9, 59], [2.2, 7, 42], [2.4, 5, 28]];
       for (const [turn, leaves, length] of rings) {
@@ -118,13 +185,13 @@ window.PlantArt = (() => {
           const x = Math.sin(angle);
           const y = Math.cos(angle);
           const tilt = Math.atan2(x, y * .54);
-          leaf(ctx, x * 7, -14 - y * 7, tilt, length * (1 - Math.abs(y) * .36), length * .24,
+          drawLeaf(ctx, x * 7, -14 - y * 7, tilt, length * (1 - Math.abs(y) * .36 - plant.quality * .022), length * .24,
             "succulent", colors, random, pale);
         }
       }
       return;
     }
-    const number = Math.round(8 + plant.size * .085);
+    const number = Math.round(8 + plant.size * .085 + plant.quality * .5);
     const stems = Array.from({ length: number }, (_, i) => {
       const along = (i / Math.max(1, number - 1)) * 2 - 1;
       const scale = .75 + random() * .3;
@@ -134,7 +201,7 @@ window.PlantArt = (() => {
     const stemColor = rgb(mix(foliage, ink.dark, .24));
     for (const { along, scale, reach, rise, tilt } of stems) {
       const drape = shape === "trailing" ? 1.31 : shape === "fern" ? 1.02 : .68;
-      const endX = along * reach * (shape === "spear" ? .65 : 1);
+      const endX = along * reach * (1 - plant.quality * .031) * (shape === "spear" ? .65 : 1);
       const endY = -rise + Math.abs(along) * (55 + wilt * 53) * drape;
       stem(ctx, along * 17, 0, endX, endY, endX * .34, stemColor, 2.2 * scale);
       if (shape === "fern") {
@@ -143,20 +210,20 @@ window.PlantArt = (() => {
           const x = (1 - position) ** 2 * along * 17 + 2 * position * (1 - position) * (along * 17 + endX * .34) + position ** 2 * endX;
           const y = 2 * position * (1 - position) * (endY / 2 - 11) + position ** 2 * endY;
           const length = (31 - i * 2.4) * scale;
-          leaf(ctx, x, y, along * .75 - 1.05, length, length * .25, shape, colors, random, false);
-          leaf(ctx, x, y, along * .75 + 1.05, length, length * .25, shape, colors, random, false);
+          drawLeaf(ctx, x, y, along * .75 - 1.05, length, length * .25, shape, colors, random, false);
+          drawLeaf(ctx, x, y, along * .75 + 1.05, length, length * .25, shape, colors, random, false);
         }
       } else if (shape === "grass" || shape === "spear") {
-        leaf(ctx, endX * .19, -4, along * (shape === "spear" ? .69 : 1.28) + tilt, (132 + (rise - 77) * .75) * scale,
+        drawLeaf(ctx, endX * .19, -4, along * (shape === "spear" ? .69 : 1.28) + tilt, (132 + (rise - 77) * .75) * scale,
           shape === "spear" ? 13 : 6, shape, colors, random, true);
       } else {
         const length = (shape === "monstera" ? 82 : shape === "shield" ? 74 : shape === "succulent" ? 36 : 58) * scale;
-        leaf(ctx, endX, endY, along * (shape === "trailing" ? 1.65 : 1.01) + tilt, length, length * .38, shape, colors, random, pale);
+        drawLeaf(ctx, endX, endY, along * (shape === "trailing" ? 1.65 : 1.01) + tilt, length, length * .38, shape, colors, random, pale);
         if (shape === "flower" || shape === "succulent") {
-          leaf(ctx, endX, endY, -1.12 + tilt, length * .78, length * .34, shape, colors, random, pale);
-          leaf(ctx, endX, endY, 1.12 + tilt, length * .76, length * .32, shape, colors, random, pale);
+          drawLeaf(ctx, endX, endY, -1.12 + tilt, length * .78, length * .34, shape, colors, random, pale);
+          drawLeaf(ctx, endX, endY, 1.12 + tilt, length * .76, length * .32, shape, colors, random, pale);
         } else {
-          leaf(ctx, endX * .64, endY * .68, along * 1.78 - tilt, length * .76, length * .29, shape, colors, random, pale);
+          drawLeaf(ctx, endX * .64, endY * .68, along * 1.78 - tilt, length * .76, length * .29, shape, colors, random, pale);
         }
       }
     }
@@ -210,23 +277,67 @@ window.PlantArt = (() => {
     ctx.restore();
   }
 
-  function draw(canvas) {
+  function pruningTargets(leaves, scale) {
+    const candidates = leaves.map(({ x, y, angle, length }, id) => ({
+      id,
+      x: 170 + (x + Math.sin(angle) * length * .58) * scale,
+      y: 232 + (y - Math.cos(angle) * length * .58) * scale,
+    })).filter(point => point.x >= 21 && point.x <= 319 && point.y >= 24 && point.y <= 231);
+    const targets = [];
+    for (const direction of [1, -1]) {
+      const next = candidates.filter(point => targets.every(target => Math.hypot(point.x - target.x, point.y - target.y) >= 40))
+        .sort((a, b) => direction * (a.x - b.x))[0];
+      if (next) targets.push(next);
+    }
+    const center = candidates.filter(point => targets.every(target => Math.hypot(point.x - target.x, point.y - target.y) >= 40))
+      .sort((a, b) => a.y - b.y)[0];
+    if (center) targets.push(center);
+    return targets;
+  }
+
+  function draw(canvas, removedLeaves) {
     const plant = {
       species: canvas.dataset.species, pheno: Number(canvas.dataset.pheno || 0),
       size: Number(canvas.dataset.size || 65), health: Number(canvas.dataset.health || 95),
+      quality: Number(canvas.dataset.quality || 0),
     };
     const species = SPECIES[plant.species];
     if (!species) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const unit = canvas.width / 340;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.scale(unit, unit);
     ctx.translate(170, 229);
+    ctx.save();
+    if (species.shape === "tree") ctx.scale(1.17, .58);
     pot(ctx, species.tier);
+    ctx.restore();
     const scale = .65 + plant.size * .0047;
     ctx.translate(0, 3);
     ctx.scale(scale, scale);
-    drawCanopy(ctx, species, plant);
+    if (!removedLeaves) {
+      drawCanopy(ctx, species, plant, leaf);
+      return;
+    }
+
+    const leaves = [];
+    drawCanopy(ctx, species, plant, (_, x, y, angle, length, width, style, colors, random, pale) => {
+      const textureSeed = Math.floor(random() * 4294967296);
+      leaves.push({ x, y, angle, length, width, style, colors, textureSeed, pale });
+    });
+    const targets = pruningTargets(leaves, scale);
+    const marked = new Set(targets.map(point => point.id));
+    const dryColors = [[165, 125, 59], [213, 182, 103], [109, 76, 32], [237, 212, 132]];
+    // Draw dry leaves on top so the trim targets stay visible in dense crowns.
+    for (const isDry of [false, true]) {
+      leaves.forEach(({ x, y, angle, length, width, style, colors, textureSeed, pale }, id) => {
+        if (marked.has(id) !== isDry || removedLeaves.has(id)) return;
+        leaf(ctx, x, y, angle, length, width, style, isDry ? dryColors : colors, generator(textureSeed), pale || isDry);
+      });
+    }
+    return targets;
   }
 
   return { draw };
