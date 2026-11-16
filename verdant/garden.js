@@ -4,6 +4,7 @@
 window.Garden = (() => {
   const MINUTE = 60_000;
   const HOUR = 60 * MINUTE;
+  const RESTOCK_INTERVAL = 5 * MINUTE;
   const CROSS_COST = 5;
   const RARITIES = ["Common", "Uncommon", "Rare", "Legendary"];
   const PHASES = [
@@ -87,7 +88,8 @@ window.Garden = (() => {
       version: 1, updatedAt: now, coins: 36, displayBank: 0, capacity: 4,
       nextId: 1, inventory: { fertilizer: 2, tonic: 0 }, plants: [], seeds: [], discovered: [],
       history: { recovered: false, bought: false, harvested: false, rareCross: false },
-      claimed: [], selected: 1,
+      claimed: [], selected: 1, journal: [],
+      marketPurchases: { window: -1, quantities: {} }, orders: null,
     };
     const plant = makePlant(state, "golden", 0, now, "starter");
     state.plants.push(plant);
@@ -181,9 +183,96 @@ window.Garden = (() => {
     return state.capacity - state.plants.length - state.seeds.length;
   }
 
-  function marketUnlocked(state, species) {
-    const discovered = new Set(state.discovered.map(key => key.split(":")[0]));
-    return discovered.has(species.id) || discovered.size >= [0, 3, 9, 15][species.tier];
+  function speciesUnlocked(state, species) {
+    return species.tier === 0 || state.discovered.some(key => key.startsWith(species.id + ":"));
+  }
+
+  function marketWindow(state, now) {
+    return Math.max(state.marketPurchases.window, Math.floor(now / RESTOCK_INTERVAL));
+  }
+
+  function nextRestock(state, now) {
+    return (marketWindow(state, now) + 1) * RESTOCK_INTERVAL;
+  }
+
+  function marketStock(state, species, now) {
+    if (!speciesUnlocked(state, species)) return 0;
+    if (species.tier === 0) return Infinity;
+    const window = marketWindow(state, now);
+    const cadence = [0, 2, 4, 8][species.tier];
+    const offset = [0, 0, 1, 3][species.tier];
+    const rotation = Math.floor(window / cadence);
+    if (window % cadence !== offset || rotation % 5 !== species.position) return 0;
+    const purchases = state.marketPurchases;
+    const used = purchases.window === window ? (purchases.quantities[species.id] || 0) : 0;
+    return Math.max(0, (species.tier === 1 ? 2 : 1) - used);
+  }
+
+  function buyPlant(state, species, now) {
+    if (!marketStock(state, species, now) || freeSlots(state) <= 0 || state.coins < species.price) return null;
+    if (species.tier > 0) {
+      const window = marketWindow(state, now);
+      if (state.marketPurchases.window !== window) state.marketPurchases = { window, quantities: {} };
+      const stock = state.marketPurchases.quantities;
+      stock[species.id] = (stock[species.id] || 0) + 1;
+    }
+    state.coins -= species.price;
+    state.history.bought = true;
+    return addPlant(state, species.id, 0, now, "market");
+  }
+
+  function localDay(now) {
+    const date = new Date(now);
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / (24 * HOUR);
+  }
+
+  function nextOrderDay(now) {
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    return midnight.getTime();
+  }
+
+  function rotateOrders(state, now) {
+    const day = localDay(now);
+    const previous = state.orders;
+    if (previous && day <= previous.day) return;
+    const rotation = previous ? previous.rotation + day - previous.day : 0;
+    const pinned = previous?.entries.find(order => order.pinned && !order.fulfilled);
+    const specialty = CATALOG.filter(species => species.tier > 0 && speciesUnlocked(state, species));
+    const phenotypeSpecies = specialty[rotation % Math.max(1, specialty.length)] || SPECIES.golden;
+    const pheno = 1 + rotation % (phenotypeSpecies.phenotypes.length - 1);
+    const pruningSpecies = [SPECIES.golden, SPECIES.jade, SPECIES.heart][rotation % 3];
+    const entries = [
+      { slot: "grow", tier: 0, size: [45, 55, 50][rotation % 3], bonus: [12, 15, 14][rotation % 3] },
+      { slot: "prune", species: pruningSpecies.id, size: [70, 65, 75][rotation % 3], quality: 3, bonus: 23 },
+      { slot: "phenotype", species: phenotypeSpecies.id, pheno, bonus: 24 + 9 * phenotypeSpecies.tier },
+    ].map(order => pinned?.slot === order.slot ? pinned : { ...order, id: day + "-" + order.slot });
+    state.orders = { day, rotation, entries };
+  }
+
+  function orderMatches(order, plant) {
+    return (order.species === undefined || plant.species === order.species) &&
+      (order.tier === undefined || SPECIES[plant.species].tier === order.tier) &&
+      (order.pheno === undefined || plant.pheno === order.pheno) &&
+      plant.size >= (order.size || 0) && plant.quality >= (order.quality || 0);
+  }
+
+  function toggleOrderPin(state, order) {
+    if (!state.orders.entries.includes(order) || order.fulfilled) return false;
+    const pin = !order.pinned;
+    for (const entry of state.orders.entries) entry.pinned = pin && entry === order;
+    return pin;
+  }
+
+  function deliverOrder(state, order, plant) {
+    if (!state.orders.entries.includes(order) || order.fulfilled || !state.plants.includes(plant) ||
+        !orderMatches(order, plant)) return 0;
+    const payout = salePrice(plant) + order.bonus;
+    state.coins += payout;
+    state.plants = state.plants.filter(item => item !== plant);
+    order.fulfilled = true;
+    order.pinned = false;
+    return payout;
   }
 
   function parentProblem(plant, now) {
@@ -214,7 +303,8 @@ window.Garden = (() => {
       ? chosen.pheno
       : Math.floor(random() * species.phenotypes.length);
     const duration = [4, 6, 10, 16][species.tier] * MINUTE;
-    const seed = { id: state.nextId++, species: species.id, pheno, readyAt: now + duration };
+    const parents = [a, b].map(({ id, species, pheno }) => ({ id, species, pheno }));
+    const seed = { id: state.nextId++, species: species.id, pheno, readyAt: now + duration, parents };
     state.seeds.push(seed);
     state.coins -= CROSS_COST;
     a.bredUntil = b.bredUntil = now + duration + 3 * MINUTE;
@@ -225,6 +315,9 @@ window.Garden = (() => {
     if (!seed || seed.readyAt > now || !state.seeds.includes(seed)) return null;
     state.seeds = state.seeds.filter(item => item.id !== seed.id);
     const plant = addPlant(state, seed.species, seed.pheno, now, "seedling");
+    state.journal.unshift({
+      id: plant.id, species: plant.species, pheno: plant.pheno, parents: seed.parents || [], pottedAt: now,
+    });
     state.history.harvested = true;
     if (SPECIES[seed.species].tier >= 2) state.history.rareCross = true;
     return plant;
@@ -241,6 +334,7 @@ window.Garden = (() => {
   return {
     MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, CATALOG, SPECIES, SUPPLIES, GOALS, clamp,
     phaseAt, careNeeds, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
-    marketUnlocked, parentProblem, crossPreview, breed, potSeed,
+    speciesUnlocked, marketStock, nextRestock, buyPlant, rotateOrders, nextOrderDay, orderMatches,
+    toggleOrderPin, deliverOrder, parentProblem, crossPreview, breed, potSeed,
   };
 })();

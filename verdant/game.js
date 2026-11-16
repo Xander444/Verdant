@@ -9,11 +9,14 @@
   const clock = document.querySelector("#local-clock");
   const wallet = document.querySelector("#wallet");
   const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+  const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
   const numberFormat = new Intl.NumberFormat();
   const paths = {
     sprout: '<path d="M12 22v-9m0 2C5 15 3 11 3 6c5 0 9 3 9 9Zm0 1c0-7 3-11 9-12 1 6-2 11-9 12Z"/>',
     home: '<path d="M3 10 12 3l9 7v11H3Zm6 11v-7h6v7M12 3v5"/>',
     shop: '<path d="M3 9 5 4h14l2 5v2c0 3-4 3-5 1-1 2-5 2-6 0-1 2-5 2-7 0Zm1 5v7h16v-7M9 21v-6h6v6"/>',
+    clipboard: '<path d="M8 5H5v16h14V5h-3M8 3h8v5H8Zm0 9h8m-8 4h6"/>',
+    pin: '<path d="m15 4 5 5-4 2-2 6-7-7 6-2 2-4Zm-5 10-5 5"/>',
     dna: '<path d="M4 20c10 0 16-6 16-16M4 4c0 10 6 16 16 16M5 8h4m6 8h4M8 19v-4m8-10v4"/>',
     book: '<path d="M12 5v16M3 4h5c2 0 4 1 4 2 0-1 2-2 4-2h5v15h-5c-2 0-4 1-4 2 0-1-2-2-4-2H3Z"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/>',
@@ -49,7 +52,7 @@
   const activePlant = () => state.plants.find(plant => plant.id === state.selected) || state.plants[0];
   const canRescue = () => !state.plants.length && G.freeSlots(state) > 0 && state.coins < SPECIES.golden.price;
   const tierBadge = species => `<span class="badge rarity-${species.tier}"><i></i>${RARITIES[species.tier]}</span>`;
-  const currentPage = () => ["greenhouse", "market", "breeding", "guide"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "greenhouse";
+  const currentPage = () => ["greenhouse", "market", "orders", "breeding", "guide"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "greenhouse";
   const button = (label, action, { symbol, extra = "", className = "", disabled = false } = {}) =>
     `<button type="button" class="button ${className}" data-action="${action}" ${extra}${disabled ? " disabled" : ""}>${symbol ? icon(symbol) : ""}${label}</button>`;
   const canvas = (species, { pheno = 0, size = 58, health = 95, large = false } = {}) =>
@@ -70,6 +73,9 @@
             Array.isArray(saved.discovered) && saved.inventory && saved.history && Array.isArray(saved.claimed) &&
             Number.isFinite(saved.updatedAt) && saved.plants.every(plant => SPECIES[plant.species])) {
           state = saved;
+          state.journal ??= [];
+          state.marketPurchases ??= { window: -1, quantities: {} };
+          state.orders ??= null;
         }
       }
       lastSaved = raw;
@@ -109,6 +115,14 @@
     const minutes = Math.ceil(seconds / 60);
     if (minutes < 60) return `${minutes}m`;
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  }
+
+  const countdown = until => `<span data-countdown="${until}"></span>`;
+
+  function advanceTo(now) {
+    G.advance(state, now);
+    G.rotateOrders(state, now);
+    trackRecovery();
   }
 
   function hero(now) {
@@ -264,10 +278,11 @@
       ${RARITIES.map((rarity, tier) => `<option value="${tier}"${String(tier) === selected ? " selected" : ""}>${rarity}</option>`).join("")}</select></label>`;
   }
 
-  function market() {
+  function market(now) {
     const spaceCost = G.shelfCost(state);
     const open = G.freeSlots(state);
-    const stock = CATALOG.filter(species => view.marketFilter === "all" || String(species.tier) === view.marketFilter);
+    const stock = CATALOG.filter(species => G.speciesUnlocked(state, species) &&
+      (view.marketFilter === "all" || String(species.tier) === view.marketFilter));
     const supplies = Object.entries(SUPPLIES).map(([id, item]) => `<article class="paper supply-card">
       <span class="tile-icon">${icon(item.icon)}</span><div><h3>${item.name}</h3><p>${item.description}</p><small>${state.inventory[id]} in stock</small></div>
       ${button(coins(item.cost), "buy-supply", { extra: `data-id="${id}" aria-label="Buy ${item.name} for ${item.cost} coins"`, disabled: state.coins < item.cost })}</article>`).join("");
@@ -279,19 +294,79 @@
         ${supplies}
       </div>
       <section aria-labelledby="stock-title">
-        <div class="section-heading listing-heading"><h2 id="stock-title">Plants for sale</h2>${rarityFilter("marketFilter", view.marketFilter)}</div>
+        <div class="section-heading listing-heading"><div class="heading-with-count"><h2 id="stock-title">Plants for sale</h2>
+          <span class="count-pill">${icon("clock")} Restock in ${countdown(G.nextRestock(state, now))}</span></div>${rarityFilter("marketFilter", view.marketFilter)}</div>
+        <p class="section-description">Common plants are always stocked. Breed and pot other species to unlock them for limited restocks.</p>
         ${open ? "" : `<p class="inline-note">${icon("info")} Your shelves are full. Add spaces or sell a plant to make room.</p>`}
-        <div class="catalog-grid">${stock.map(species => {
-          const unlocked = G.marketUnlocked(state, species);
+        ${stock.length ? `<div class="catalog-grid">${stock.map(species => {
+          const quantity = G.marketStock(state, species, now);
           return `<article class="paper catalog-card">
             <div class="catalog-art rarity-back-${species.tier}">${tierBadge(species)}${canvas(species, { size: 59 })}</div>
             <div class="catalog-copy"><h3>${species.name}</h3><p>${species.note}</p>
-            ${unlocked ? button(`Buy ${coins(species.price)}`, "buy-plant", {
-              className: "catalog-button", extra: `data-id="${species.id}" aria-label="Buy ${species.name} for ${species.price} coins"`, disabled: !open || state.coins < species.price,
-            }) : `<span class="locked">${icon("lock")} Discover ${[0, 3, 9, 15][species.tier]} species or breed this plant</span>`}</div>
+            ${species.tier ? `<p class="stock-label ${quantity ? "in-stock" : ""}"><i></i>${quantity ? `${quantity} in stock` : "Out of stock"}</p>` : ""}
+            ${button(`Buy ${coins(species.price)}`, "buy-plant", {
+              className: "catalog-button", extra: `data-id="${species.id}" aria-label="Buy ${species.name} for ${species.price} coins"`,
+              disabled: !quantity || !open || state.coins < species.price,
+            })}</div>
+          </article>`;
+        }).join("")}</div>` : `<div class="paper collection-empty">${icon("lock")} Breed a plant of this rarity to unlock its market listing.</div>`}
+      </section>`;
+  }
+
+  const orderTitles = { grow: "Room to grow", prune: "Shaped by hand", phenotype: "A collector’s eye" };
+  const orderIcons = { grow: "sprout", prune: "prune", phenotype: "leaf" };
+
+  function orderRequirement(order) {
+    const species = SPECIES[order.species];
+    if (order.slot === "grow") return `Any Common plant at ${order.size}% growth or higher.`;
+    if (order.slot === "prune") return `${species.name} at ${order.size}% growth or higher and Shape ${order.quality} or better.`;
+    return `${species.name} with the ${species.phenotypes[order.pheno]} phenotype.`;
+  }
+
+  function orders(now) {
+    return `${pageIntro("Collector Orders", "Deliver plants to local collectors for their sale value plus a coin bonus.", "clipboard",
+      `<span class="count-pill">${icon("clock")} New orders in ${countdown(G.nextOrderDay(now))}</span>`)}
+      <section aria-labelledby="orders-title">
+        <div class="section-heading listing-heading"><h2 id="orders-title">Order board</h2></div>
+        <p class="section-description">Orders rotate at local midnight. Pin one to keep it until you deliver it or unpin it.</p>
+        <div class="order-grid">${state.orders.entries.map(order => {
+          const matches = order.fulfilled ? 0 : state.plants.filter(plant => G.orderMatches(order, plant)).length;
+          return `<article class="paper order-card ${order.pinned ? "pinned-order" : ""}">
+            <div class="goal-top"><span class="tile-icon">${icon(orderIcons[order.slot])}</span>
+              ${order.fulfilled ? `<span class="count-pill">${icon("check")} Delivered</span>` :
+                button(order.pinned ? "Pinned" : "Pin order", "pin-order", { symbol: "pin", className: "compact",
+                  extra: `data-id="${order.id}" aria-pressed="${Boolean(order.pinned)}"` })}</div>
+            <h3>${orderTitles[order.slot]}</h3><p>${orderRequirement(order)}</p>
+            <div class="order-bottom"><span class="goal-reward">${reward(order.bonus)} bonus</span>
+              ${order.fulfilled ? "" : button(matches ? "Choose plant" : "No match yet", "choose-delivery", {
+                className: "primary compact", disabled: !matches, extra: `data-id="${order.id}"`,
+              })}</div>
           </article>`;
         }).join("")}</div>
       </section>`;
+  }
+
+  function journal() {
+    return `<section class="journal-section" aria-labelledby="journal-title">
+      <div class="section-heading"><div class="heading-with-count"><h2 id="journal-title">Breeding journal</h2>
+        <span class="count-pill">${state.journal.length} ${state.journal.length === 1 ? "seedling" : "seedlings"}</span></div></div>
+      ${!state.journal.length ? `<div class="paper collection-empty">${icon("book")} Your first potted seedling will appear here with its parents.</div>` :
+        `<div class="journal-list">${state.journal.map(entry => {
+          const child = SPECIES[entry.species];
+          const pair = entry.parents.map(parent => {
+            const species = SPECIES[parent.species];
+            return `<span><strong>${species.name}</strong> <small>#${parent.id} · ${species.phenotypes[parent.pheno]}</small></span>`;
+          }).join("<span aria-hidden=\"true\">×</span>");
+          const canReuse = entry.parents.length === 2 && entry.parents.every(parent => state.plants.some(plant => plant.id === parent.id));
+          return `<article class="paper journal-row">
+            <span class="shelf-preview">${canvas(child, { pheno: entry.pheno, size: 38 })}</span>
+            <div><h3>${child.name}</h3><p>${child.phenotypes[entry.pheno]} · ${dateFormat.format(entry.pottedAt)}</p>
+              <div class="journal-parents">${pair || "Parents unavailable"}</div></div>
+            ${canReuse ? button("Use this pair", "reuse-parents", { symbol: "dna", className: "compact", extra: `data-id="${entry.id}"` }) :
+              entry.parents.length ? '<small class="journal-unavailable">Pair no longer on shelves</small>' : ""}
+          </article>`;
+        }).join("")}</div>`}
+    </section>`;
   }
 
   function breeding(now) {
@@ -319,7 +394,7 @@
     };
 
     const crossNote = !valid ? "Choose two plants with at least 72% health and 42% growth."
-      : target ? `<strong>72% chance of ${target.name}</strong> · ${RARITIES[target.tier]}<br>Otherwise, a species from either parent.`
+      : target ? `<strong>72% chance of ${G.speciesUnlocked(state, target) ? target.name : `an undiscovered ${RARITIES[target.tier]} plant`}</strong><br>Otherwise, a species from either parent.`
       : a.species === b.species ? `<strong>${SPECIES[a.species].name}</strong><br>Seedlings can inherit or develop a different phenotype.`
       : "<strong>Either parent's species</strong><br>Pair different species of the same rarity to breed up a tier.";
     const cause = problem || (!G.freeSlots(state) ? "Open a shelf space for the seedling." : state.coins < G.CROSS_COST ? "You need 5 coins to start a cross." : "");
@@ -335,20 +410,25 @@
           <div class="section-heading"><h2>Seed tray</h2><span class="count-pill">${state.seeds.length} growing</span></div>
           ${state.seeds.length ? `<div class="seed-list">${state.seeds.map(seed => {
             const ready = seed.readyAt <= now;
+            const species = SPECIES[seed.species];
+            const name = G.speciesUnlocked(state, species) ? species.name : `Undiscovered ${RARITIES[species.tier]} plant`;
             return `<article class="seed-row"><span class="tile-icon">${icon("sprout")}</span><div><h3>${ready ? "Ready to pot" : "Germinating"}</h3>
-              <p>${ready ? SPECIES[seed.species].name : `${remaining(seed.readyAt, now)} remaining`}</p></div>
+              <p>${ready ? name : `${countdown(seed.readyAt)} remaining`}</p></div>
               ${button("Pot seedling", "pot", { className: "compact", extra: `data-id="${seed.id}"`, disabled: !ready })}</article>`;
           }).join("")}</div>` : `<div class="nursery-empty"><span class="tile-icon">${icon("leaf")}</span><h3>The tray is empty</h3><p>New crosses will germinate here. Each seed reserves one shelf space.</p></div>`}
         </section>
-      </div>`;
+      </div>${journal()}`;
   }
 
   function guide() {
-    const stock = CATALOG.filter(species => view.guideFilter === "all" || String(species.tier) === view.guideFilter);
+    const filtered = CATALOG.filter(species => view.guideFilter === "all" || String(species.tier) === view.guideFilter);
+    const stock = filtered.filter(species => G.speciesUnlocked(state, species));
+    const hidden = filtered.length - stock.length;
     return `${pageIntro("Field Guide", "Track the species and phenotypes you discover as you grow your collection.", "book",
       `<div class="guide-count"><strong>${countSpecies()} / ${CATALOG.length}</strong><span>Species discovered</span></div>`)}
       <section aria-labelledby="catalog-title">
         <div class="section-heading listing-heading"><div class="heading-with-count"><h2 id="catalog-title">Plant catalog</h2><span class="count-pill">${state.discovered.length} / ${totalPhenotypes} phenotypes</span></div>${rarityFilter("guideFilter", view.guideFilter)}</div>
+        ${hidden ? `<p class="inline-note">${icon("lock")} ${hidden} hidden ${hidden === 1 ? "species awaits" : "species await"} discovery in the breeding room.</p>` : ""}
         <div class="catalog-grid">${stock.map(species => {
           const found = species.phenotypes.map((_, i) => i).filter(i => state.discovered.includes(`${species.id}:${i}`));
           return `<article class="paper catalog-card">
@@ -374,18 +454,21 @@
       if (link.dataset.page === page) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     }
-    const content = page === "market" ? market() : page === "breeding" ? breeding(now) : page === "guide" ? guide() : greenhouse(now);
+    const content = page === "market" ? market(now) : page === "orders" ? orders(now) :
+      page === "breeding" ? breeding(now) : page === "guide" ? guide() : greenhouse(now);
     const html = `${content}<footer class="footer">${icon(storageWorks ? "check" : "info")} ${storageWorks ? "Progress saved on this browser" : "Browser saving is unavailable"}</footer>`;
-    if (html === view.markup) return;
-    view.markup = html;
-    app.innerHTML = html;
-    paint(app);
-    if (previous) {
-      const next = previous.elementId ? document.getElementById(previous.elementId) :
-        previous.action && Array.from(app.querySelectorAll("[data-action]")).find(element =>
-          element.dataset.action === previous.action && element.dataset.id === previous.id);
-      if (next && !next.disabled) next.focus({ preventScroll: true });
+    if (html !== view.markup) {
+      view.markup = html;
+      app.innerHTML = html;
+      paint(app);
+      if (previous) {
+        const next = previous.elementId ? document.getElementById(previous.elementId) :
+          previous.action && Array.from(app.querySelectorAll("[data-action]")).find(element =>
+            element.dataset.action === previous.action && element.dataset.id === previous.id);
+        if (next && !next.disabled) next.focus({ preventScroll: true });
+      }
     }
+    for (const timer of app.querySelectorAll("[data-countdown]")) timer.textContent = remaining(Number(timer.dataset.countdown), now);
   }
 
   function paint(root) {
@@ -421,6 +504,19 @@
         symbol: ["moon", "sun", "sun"][i], extra: `data-id="${i}" data-plant="${plant.id}"`, disabled: i === plant.location,
         className: i === best ? "recommended" : "",
       })).join("")}</div>`);
+  }
+
+  function chooseDelivery(order) {
+    const options = state.plants.filter(plant => G.orderMatches(order, plant)).map(plant => {
+      const species = SPECIES[plant.species];
+      const payout = G.salePrice(plant) + order.bonus;
+      return button(`<span>${species.name} #${plant.id}<small>${species.phenotypes[plant.pheno]} · ${percent(plant.size)}% growth</small></span>
+        <span class="goal-reward">${coins(payout)}</span>`, "deliver-order", {
+        className: "delivery-option", extra: `data-id="${order.id}" data-plant="${plant.id}" aria-label="Deliver ${species.name} number ${plant.id} for ${payout} coins"`,
+      });
+    }).join("");
+    openDialog(orderTitles[order.slot], `<p>${orderRequirement(order)} The plant you deliver leaves your shelf.</p>
+      <div class="delivery-options">${options || "<p>No plants currently meet this order.</p>"}</div>`);
   }
 
   function careAction(action, plant, now) {
@@ -469,7 +565,7 @@
         dialog.close();
         return;
       case "inspect":
-        if (species) showEntry(species);
+        if (species && G.speciesUnlocked(state, species)) showEntry(species);
         return;
       case "select":
         if (state.plants.some(item => item.id === Number(id))) state.selected = Number(id);
@@ -544,11 +640,26 @@
         return `${item.name} added to your supplies.`;
       }
       case "buy-plant":
-        if (!species || !G.marketUnlocked(state, species) || !G.freeSlots(state) || state.coins < species.price) return;
-        G.addPlant(state, species.id, 0, now, "market");
-        state.coins -= species.price;
-        state.history.bought = true;
+        if (!species || !G.buyPlant(state, species, now)) return "That plant is unavailable right now.";
         return `${species.name} added to your shelves.`;
+      case "pin-order":
+      case "choose-delivery":
+      case "deliver-order": {
+        const order = state.orders.entries.find(entry => entry.id === id);
+        if (!order || order.fulfilled) {
+          if (dialog.open) dialog.close();
+          return "This order is no longer open.";
+        }
+        if (action === "pin-order") return G.toggleOrderPin(state, order) ? "Order pinned." : "Order unpinned.";
+        if (action === "choose-delivery") {
+          chooseDelivery(order);
+          return;
+        }
+        const delivered = state.plants.find(item => item.id === Number(target.dataset.plant));
+        const payout = G.deliverOrder(state, order, delivered);
+        dialog.close();
+        return payout ? `Order delivered. You earned ${payout} coins.` : "This plant is unavailable for delivery.";
+      }
       case "rescue":
         if (!canRescue()) return;
         G.addPlant(state, "golden", 0, now, "starter");
@@ -560,11 +671,26 @@
         view.parentA = view.parentB = "";
         return "Cross started. Check the seed tray for progress.";
       }
+      case "reuse-parents": {
+        const entry = state.journal.find(item => item.id === Number(id));
+        if (entry?.parents.length !== 2 || !entry.parents.every(parent => state.plants.some(item => item.id === parent.id))) {
+          return "This pair is no longer on your shelves.";
+        }
+        [view.parentA, view.parentB] = entry.parents.map(parent => String(parent.id));
+        requestAnimationFrame(() => {
+          const firstParent = document.querySelector("#parentA");
+          firstParent?.focus({ preventScroll: true });
+          firstParent?.scrollIntoView({ block: "center" });
+        });
+        return "Parents selected.";
+      }
       case "pot": {
         const seed = state.seeds.find(item => item.id === Number(id));
+        const newSpecies = seed && !G.speciesUnlocked(state, SPECIES[seed.species]);
         const seedling = G.potSeed(state, seed, now);
         if (!seedling) return;
-        return `${SPECIES[seedling.species].name} added to your shelves.`;
+        const name = SPECIES[seedling.species].name;
+        return newSpecies ? `${name} discovered. Market listing unlocked.` : `${name} added to your shelves.`;
       }
     }
   }
@@ -575,7 +701,7 @@
     const plantId = activePlant()?.id;
     syncSave();
     const now = Date.now();
-    G.advance(state, now);
+    advanceTo(now);
     const message = perform(target.dataset.action, target, now, plantId);
     trackRecovery();
     save();
@@ -592,15 +718,16 @@
 
   window.addEventListener("hashchange", () => {
     if (dialog.open) dialog.close();
+    syncSave();
+    advanceTo(Date.now());
     render();
     window.scrollTo(0, 0);
   });
 
   function refresh() {
     syncSave();
-    G.advance(state, Date.now());
-    trackRecovery();
-    if (!dialog.open && document.activeElement?.tagName !== "SELECT") render();
+    advanceTo(Date.now());
+    if (!dialog.open) render();
   }
 
   window.addEventListener("storage", event => { if (event.key === STORE) refresh(); });
@@ -609,13 +736,12 @@
   });
   window.addEventListener("pagehide", () => {
     syncSave();
-    G.advance(state, Date.now());
+    advanceTo(Date.now());
     save();
   });
   for (const element of document.querySelectorAll("[data-icon]")) element.innerHTML = icon(element.dataset.icon);
   syncSave();
-  G.advance(state, Date.now());
-  trackRecovery();
+  advanceTo(Date.now());
   save();
   render();
   setInterval(() => { if (!document.hidden) refresh(); }, 5000);
