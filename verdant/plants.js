@@ -2,7 +2,7 @@
 "use strict";
 
 window.PlantArt = (() => {
-  const { SPECIES, branchAngles } = window.Garden;
+  const { SPECIES, branchAngles, pruningCutCount } = window.Garden;
   const ink = { dark: [26, 58, 35], dry: [174, 139, 72] };
   const mix = (a, b, weight) => a.map((value, i) => Math.round(value + (b[i] - value) * weight));
   const rgb = color => "rgb(" + color.join(",") + ")";
@@ -507,21 +507,28 @@ window.PlantArt = (() => {
     ctx.restore();
   }
 
-  function pruningTargets(leaves, scale) {
+  function pruningTargets(leaves, scale, count) {
     const candidates = leaves.map(({ x, y, angle, length }, id) => ({
       id,
       x: 170 + (x + Math.sin(angle) * length * .58) * scale,
       y: 232 + (y - Math.cos(angle) * length * .58) * scale,
     })).filter(point => point.x >= 21 && point.x <= 319 && point.y >= 24 && point.y <= 231);
-    const targets = [];
-    for (const direction of [1, -1]) {
-      const next = candidates.filter(point => targets.every(target => Math.hypot(point.x - target.x, point.y - target.y) >= 40))
-        .sort((a, b) => direction * (a.x - b.x))[0];
-      if (next) targets.push(next);
+    candidates.sort((a, b) => a.x - b.x);
+    const targets = candidates.splice(0, 1);
+    while (targets.length < count && candidates.length) {
+      // Spread successive snips across the canopy, even for compact plants.
+      let nextIndex = 0;
+      let bestDistance = -1;
+      candidates.forEach((point, i) => {
+        const clearance = targets.reduce((closest, target) =>
+          Math.min(closest, (point.x - target.x) ** 2 + (point.y - target.y) ** 2), Infinity);
+        if (clearance > bestDistance) {
+          nextIndex = i;
+          bestDistance = clearance;
+        }
+      });
+      targets.push(candidates.splice(nextIndex, 1)[0]);
     }
-    const center = candidates.filter(point => targets.every(target => Math.hypot(point.x - target.x, point.y - target.y) >= 40))
-      .sort((a, b) => a.y - b.y)[0];
-    if (center) targets.push(center);
     return targets;
   }
 
@@ -569,7 +576,7 @@ window.PlantArt = (() => {
       const textureSeed = Math.floor(random() * 4294967296);
       leaves.push({ x, y, angle, length, width, style, palette, textureSeed });
     });
-    const targets = pruningTargets(leaves, scale);
+    const targets = pruningTargets(leaves, scale, pruningCutCount(plant));
     const marked = new Set(targets.map(point => point.id));
     const dryLeaf = {
       base: [173, 125, 55], light: [232, 186, 99], dark: [112, 69, 37],

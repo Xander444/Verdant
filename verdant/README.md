@@ -13,8 +13,8 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - Your starter is a sick Golden Pothos. Water its dry soil, move it to the recommended light, and prune it. Claim your goal reward when it reaches 72% health.
 - Move plants between the shade, window, and grow lamp. Drag a pot to another shelf, or select the pot and use **Move here**. Each shelf previews how quickly the selected plant's soil will dry there.
 - Use **Upgrade shelf** to install a humidity tray on any shelf, a shade curtain at the window, or a daylight dimmer for the grow lamp.
-- Use the **Watering can** to hold and pour until the soil moisture reaches the green range. The **Start pouring** and **Stop pouring** controls also work by tapping or using a keyboard. **Quick water** is available for dry soil.
-- Open **Prune**, snip each marked leaf, and choose **Finish pruning** to keep more growth. **Quick prune** takes one step. Both improve the plant's shape and share the same cooldown.
+- Use the **Watering can** to hold and pour until the soil moisture reaches the green range. You can also aim for the same range with **Start pouring** and **Stop pouring** using a mouse, touch, or keyboard.
+- Open **Prune** and snip each leaf as it is marked. Choose **Finish pruning** once all the cuts are done. A pruning session takes two to seven snips as the plant grows.
 - On a woody plant, open **Train branches** to select and bend a branch. Save the shape to keep the new silhouette.
 - Buy a second Common plant. Feed both with your starting fertilizer to bring them up to breeding size. You need an open shelf space, five coins, and two plants with at least 72% health and 42% growth to start a cross.
 - Pair two different plants of the same rarity for a chance at the next rarity. The Breeding Room shows the odds, and potting a new species adds it to the Field Guide. Breed two of the same species to discover new phenotypes.

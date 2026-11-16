@@ -159,12 +159,10 @@
   }
 
   function controlsFor(plant, now) {
-    const needs = G.careNeeds(plant, now);
-    const canWater = plant.water <= Math.min(needs.dry + 10, 60);
     const timers = { prune: G.pruningReadyAt(plant), feed: plant.fedAt === null ? 0 : plant.fedAt + 6 * HOUR,
       mist: plant.mistedAt === null ? 0 : plant.mistedAt + HOUR, tonic: plant.tonicAt === null ? 0 : plant.tonicAt + 2 * HOUR };
     return {
-      water: canWater, prune: G.canPrune(plant, now),
+      prune: G.canPrune(plant, now),
       feed: timers.feed <= now && state.inventory.fertilizer > 0 && plant.nutrients < 84,
       mist: timers.mist <= now && plant.humidity < 83,
       tonic: timers.tonic <= now && state.inventory.tonic > 0 && plant.health < 94,
@@ -204,7 +202,6 @@
         </div>
         <div class="care-actions">
           ${button("Watering can", "watering-can", { symbol: "can", className: "primary" })}
-          ${button("Quick water", "water", { symbol: "drop", disabled: !allowed.water, extra: 'title="Water dry soil"' })}
           ${button("Move", "move", { symbol: "sun", extra: 'title="Choose where this plant gets its light"' })}
           ${button("Prune", "prune", { symbol: "prune", disabled: !allowed.prune, extra: `title="${allowed.timers.prune > now ? `Ready in ${remaining(allowed.timers.prune, now)}` : "Trim damaged leaves and improve the plant's shape"}"` })}
           ${species.shape === "tree" ? button("Train branches", "train", { symbol: "branch" }) : ""}
@@ -673,7 +670,7 @@
       notify("This plant is no longer on your shelves.");
       return;
     }
-    G.waterPlant(plant, amount, now, true);
+    G.waterPlant(plant, amount, now);
     trackRecovery();
     save();
     render();
@@ -689,12 +686,11 @@
     const nextShape = Math.min(5, plant.quality + 1);
     const shape = nextShape > plant.quality ? `Shape ${plant.quality}/5 → ${nextShape}/5` : `Shape ${plant.quality}/5`;
     openDialog(`Prune ${species.name}`, `<div class="prune-panel">
-      <p>Snip each marked leaf, then finish pruning. Trimming by hand keeps more of the plant’s growth.</p>
+      <p>Snip each leaf as it is marked, then finish pruning.</p>
       <div class="prune-scene"><div class="prune-art">${canvas(species, { ...plant, large: true })}<div data-prune-targets></div></div></div>
       <div class="prune-readout"><strong>${shape}</strong><span data-prune-progress role="status"></span></div>
       <div class="prune-actions">
         ${button("Finish pruning", "finish-prune", { symbol: "prune", className: "primary", disabled: true })}
-        ${button("Quick prune", "quick-prune")}
       </div>
     </div>`);
     const panel = dialog.querySelector(".prune-panel");
@@ -703,7 +699,7 @@
     const targets = window.PlantArt.draw(art, { removedLeaves: removed }) || [];
     pruning = { plantId: plant.id, panel, art, removed, total: targets.length };
     panel.querySelector("[data-prune-targets]").innerHTML = targets.map((target, index) =>
-      `<button class="snip-target" type="button" data-snip="${target.id}"
+      `<button class="snip-target" type="button" data-snip="${target.id}"${index === 0 ? "" : " hidden"}
         style="--x:${(target.x / 340 * 100).toFixed(2)}%;--y:${(target.y / 305 * 100).toFixed(2)}%"
         aria-label="Snip leaf ${index + 1}">${icon("prune")}</button>`).join("");
     showPruneProgress();
@@ -713,7 +709,7 @@
     const { panel, removed, total } = pruning;
     const done = total > 0 && removed.size === total;
     panel.querySelector("[data-prune-progress]").textContent = total ? `${removed.size} / ${total} leaves trimmed` :
-      "Quick prune is available.";
+      "Leaf markers unavailable. Close and reopen pruning.";
     const finish = panel.querySelector('[data-action="finish-prune"]');
     finish.disabled = !done;
     return finish;
@@ -726,8 +722,10 @@
     window.PlantArt.draw(art, { removedLeaves: removed });
     const restoreFocus = document.activeElement === target;
     target.hidden = true;
+    const next = panel.querySelectorAll("[data-snip]")[removed.size];
+    if (next) next.hidden = false;
     const finish = showPruneProgress();
-    if (restoreFocus) (panel.querySelector("[data-snip]:not([hidden])") || finish).focus({ preventScroll: true });
+    if (restoreFocus) (next || finish).focus({ preventScroll: true });
   }
 
   function showTraining(plant) {
@@ -820,11 +818,6 @@
     const needs = G.careNeeds(plant, now);
     const increase = (key, amount) => { plant[key] = G.clamp(plant[key] + amount); };
     switch (action) {
-      case "water": {
-        const amount = SPECIES[plant.species].shape === "succulent" ? 33 : 43;
-        G.waterPlant(plant, Math.min(amount, needs.wet - 4 - plant.water), now);
-        return "Plant watered.";
-      }
       case "feed":
         state.inventory.fertilizer--;
         plant.fedAt = now;
@@ -888,13 +881,11 @@
       case "prune":
         if (plant && G.canPrune(plant, now)) showPruning(plant);
         return;
-      case "quick-prune":
       case "finish-prune": {
-        const manual = action === "finish-prune";
-        if (!pruning || (manual && (!pruning.total || pruning.removed.size !== pruning.total))) return;
+        if (!pruning || !pruning.total || pruning.removed.size !== pruning.total) return;
         const trimmed = state.plants.find(item => item.id === pruning.plantId);
         dialog.close();
-        if (!trimmed || !G.prunePlant(trimmed, now, manual)) return "This plant is unavailable for pruning.";
+        if (!trimmed || !G.prunePlant(trimmed, now)) return "This plant is unavailable for pruning.";
         return `${SPECIES[trimmed.species].name} pruned. Shape ${trimmed.quality}/5.`;
       }
       case "train":
@@ -916,7 +907,6 @@
         dialog.close();
         return `Cutting from ${SPECIES[parent.species].name} is rooting in the nursery.`;
       }
-      case "water":
       case "feed":
       case "mist":
       case "tonic":
@@ -1071,6 +1061,10 @@
     });
   }
   dialog.addEventListener("keydown", event => {
+    if (event.repeat && event.key === "Enter" && event.target.closest('[data-snip], [data-action="finish-prune"]')) {
+      event.preventDefault();
+      return;
+    }
     const hold = event.target.closest("[data-pour-hold]");
     if (!hold || hold.disabled || ![" ", "Enter"].includes(event.key)) return;
     event.preventDefault();

@@ -264,7 +264,7 @@ window.Garden = (() => {
     return { min: dry + 10, max: wet - 8 };
   }
 
-  function waterPlant(plant, amount, now, manual = false) {
+  function waterPlant(plant, amount, now) {
     if (amount <= 0 || plant.water >= 100) return;
     const previous = plant.water;
     const { dry, wet } = careNeeds(plant, now);
@@ -273,7 +273,7 @@ window.Garden = (() => {
       plant.health = clamp(plant.health - Math.min(10, 3 + (plant.water - wet) * .35), 10);
     } else if (previous < dry && plant.water >= dry) {
       const range = waterRange(plant, now);
-      const bonus = manual && plant.water >= range.min && plant.water <= range.max ? 3 : 0;
+      const bonus = plant.water >= range.min && plant.water <= range.max ? 3 : 0;
       plant.health = clamp(plant.health + 17 + bonus);
     }
   }
@@ -286,12 +286,15 @@ window.Garden = (() => {
     return pruningReadyAt(plant) <= now && (plant.quality < 5 || plant.health < 85);
   }
 
-  function prunePlant(plant, now, manual = false) {
+  function pruningCutCount(plant) {
+    return 2 + Math.floor(clamp(plant.size) / 19);
+  }
+
+  function prunePlant(plant, now) {
     if (!canPrune(plant, now)) return false;
     plant.health = clamp(plant.health + (plant.health < 72 ? 10 : 3));
     plant.quality = Math.min(5, plant.quality + 1);
-    const trim = manual ? 1 : 3;
-    plant.size -= Math.min(trim, Math.max(0, plant.size - 8));
+    plant.size -= Math.min(1, Math.max(0, plant.size - 8));
     plant.prunedAt = now;
     return true;
   }
@@ -564,7 +567,7 @@ window.Garden = (() => {
     CATALOG, SPECIES, SUPPLIES, GOALS, clamp,
     phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
     hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, enforceDisplayLimit, setDisplay,
-    pruningReadyAt, canPrune, prunePlant,
+    pruningReadyAt, canPrune, pruningCutCount, prunePlant,
     speciesUnlocked, marketStock, nextRestock, buyPlant, rotateOrders, nextOrderDay, orderMatches,
     toggleOrderPin, deliverOrder, parentProblem, crossPreview, phenotypeOdds, breed, cuttingProblem, rootingTime, takeCutting, potSeed,
   };
