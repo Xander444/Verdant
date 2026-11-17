@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const G = window.Garden;
-  const { SPECIES, CATALOG, RARITIES, LOCATIONS, GOALS, SUPPLIES, POT_STYLES, SOIL_MIXES, GROW_LAMP, GROW_LAMP_SLOTS, HOUR } = G;
+  const { SPECIES, CATALOG, RARITIES, LOCATIONS, GOALS, SUPPLIES, AUTOMATIONS, QUEST_TRACKS, EXHIBITIONS, POT_STYLES, SOIL_MIXES, GROW_LAMP, GROW_LAMP_SLOTS, HOUR } = G;
   const STORE = "verdant-greenhouse-v1";
   const app = document.querySelector("#app");
   const dialog = document.querySelector("#dialog");
@@ -70,7 +70,7 @@
   const activePlant = () => state.plants.find(plant => plant.id === state.selected) || state.plants[0];
   const canRescue = () => !state.plants.length && G.freeSlots(state) > 0 && state.coins < SPECIES.golden.price;
   const tierBadge = species => `<span class="badge rarity-${species.tier}"><i></i>${RARITIES[species.tier]}</span>`;
-  const currentPage = () => ["greenhouse", "market", "orders", "breeding", "guide"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "greenhouse";
+  const currentPage = () => ["greenhouse", "market", "orders", "breeding", "guide", "quests"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "greenhouse";
   const button = (label, action, { symbol, extra = "", className = "", disabled = false } = {}) =>
     `<button type="button" class="button ${className}" data-action="${action}" ${extra}${disabled ? " disabled" : ""}>${symbol ? icon(symbol) : ""}${label}</button>`;
   function canvas(species, { id, traits, pheno = 0, size = 58, health = 95, quality = 0, training, pot, large = false } = {}) {
@@ -103,6 +103,7 @@
           state.orders ??= null;
           state.stationUpgrades ??= [[], [], []];
           for (const plant of state.plants) plant.traits ??= G.traitsFor(plant);
+          G.initializeProgression(state);
           G.upgradeSavedShelves(state);
           G.enforceDisplayLimit(state);
           G.enforceLampLimit(state);
@@ -251,7 +252,7 @@
           <span class="tile-icon">${icon("display")}</span>
           <div id="plant-display-rate" class="display-rate">
             <small>${plant.onDisplay ? "On display" : "If displayed"}</small>
-            <strong>${hourlyCoins(G.displayRate(plant))}</strong>
+            <strong>${hourlyCoins(G.displayRate(plant, state))}</strong>
           </div>
           ${button(displayAction, "display", { className: "compact", extra: 'aria-describedby="plant-display-rate"' })}
         </div>
@@ -314,13 +315,15 @@
 
   function incomeCard() {
     const displayed = G.displayedPlants(state);
-    const rate = displayed.reduce((sum, plant) => sum + G.displayRate(plant), 0);
+    const rate = displayed.reduce((sum, plant) => sum + G.displayRate(plant, state), 0);
     const available = Math.floor(state.displayBank + .0000001);
     return `<section class="paper income-card">
       <div class="income-heading"><span class="tile-icon">${icon("display")}</span><div><h3>Display earnings</h3>
         <p>${displayed.length} / ${G.displayCapacity(state)} display spots${displayed.length ? ` · ${hourlyCoins(rate)}` : ""}</p></div></div>
+      <p class="automation-status">${state.automation.collector?.enabled ? "Coin collector active" : "Coins ready to collect"}
+        ${state.automation.curator?.enabled ? " · Curator active" : ""}</p>
       <div class="income-bottom"><span class="income-coins">${coins(available)}</span><div class="income-actions">
-        <a class="text-link" href="#market">Buy a spot</a>
+        <a class="text-link" href="#market">Manage display</a>
         ${button("Collect", "collect", { className: "compact", disabled: available < 1 })}</div></div>
     </section>`;
   }
@@ -425,7 +428,7 @@
               G.freeSlots(state) ? '<a class="button primary" href="#market">Open market</a>' : '<a class="button primary" href="#breeding">Open breeding room</a>'}</div>`}
         </section>
         <aside aria-labelledby="goals-title">
-          <div class="section-heading"><h2 id="goals-title">Grower goals</h2></div>
+          <div class="section-heading"><h2 id="goals-title">Grower goals</h2><a class="text-link" href="#quests">Quests ${icon("arrow")}</a></div>
           ${goalCard()}${incomeCard()}
         </aside>
       </div>${shelfView(plant, now)}`;
@@ -441,6 +444,89 @@
     return `<label class="filter">Rarity
       <select id="${name}" data-filter="${name}"><option value="all">All rarities</option>
       ${RARITIES.map((rarity, tier) => `<option value="${tier}"${String(tier) === selected ? " selected" : ""}>${rarity}</option>`).join("")}</select></label>`;
+  }
+
+  function automationShop() {
+    const discovered = countSpecies();
+    const cards = Object.entries(AUTOMATIONS).map(([id, upgrade]) => {
+      const owned = state.automation[id];
+      const unlocked = discovered >= upgrade.species;
+      const status = owned ? owned.enabled ? "Active" : "Paused" :
+        unlocked ? "Available" : `Unlocks at ${upgrade.species} discovered species`;
+      return `<article class="paper automation-card" data-automation="${id}">
+        <span class="tile-icon">${icon(upgrade.icon)}</span><div><h3>${upgrade.name}</h3><p>${upgrade.description}</p>
+          <small>${status}</small></div>
+        ${owned ? button(owned.enabled ? "Pause" : "Enable", "toggle-automation", {
+          className: "compact", extra: `data-id="${id}" aria-label="${owned.enabled ? "Pause" : "Enable"} ${upgrade.name}" aria-pressed="${owned.enabled}"`,
+        }) : button(coins(upgrade.cost), "buy-automation", {
+          className: "compact", disabled: !unlocked || state.coins < upgrade.cost,
+          extra: `data-id="${id}" aria-label="Buy ${upgrade.name} for ${upgrade.cost} coins"`,
+        })}
+      </article>`;
+    }).join("");
+    const cost = G.promotionCost(state);
+    const level = state.promotionLevel;
+    return `<section aria-labelledby="automation-title">
+      <div class="section-heading listing-heading"><h2 id="automation-title">Automation and visitors</h2>
+        <span class="count-pill">+${Math.round((G.displayMultiplier(state) - 1) * 100)}% display income</span></div>
+      <div class="automation-grid">${cards}
+        <article class="paper automation-card" data-automation="promotion">
+          <span class="tile-icon">${icon("trophy")}</span><div><h3>Visitor programme</h3>
+            <p>Each level adds 10% to all display earnings.</p>
+            <small>Level ${level} / 3 · ${discovered < 20 ? "Unlocks at 20 species" : "Exhibition ribbons add further bonuses"}</small></div>
+          ${cost === null ? '<span class="count-pill">Fully upgraded</span>' : button(coins(cost), "buy-promotion", {
+            className: "compact", disabled: discovered < 20 || state.coins < cost,
+            extra: `aria-label="Upgrade Visitor programme for ${cost} coins"`,
+          })}
+        </article>
+      </div>
+    </section>`;
+  }
+
+  function quests(now) {
+    const total = QUEST_TRACKS.reduce((sum, track) => sum + track.steps.length, 0);
+    const quests = QUEST_TRACKS.map(track => {
+      const quest = G.activeQuest(state, track);
+      if (!quest) return `<article class="paper quest-card"><span class="tile-icon">${icon("trophy")}</span>
+        <h2>${track.name}</h2><p>All five quests completed.</p><span class="count-pill">${icon("check")} Complete</span></article>`;
+      const progress = Math.min(quest.target, G.questProgress(state, quest));
+      const ready = progress >= quest.target;
+      return `<article class="paper quest-card" data-quest-track="${track.id}">
+        <div class="goal-top"><span class="tile-icon">${icon(track.icon)}</span><span class="count-pill">${track.name} · ${quest.index + 1} / ${track.steps.length}</span></div>
+        <h2>${quest.name}</h2><p>${quest.description}</p>
+        <div class="quest-progress"><span>${progress} / ${quest.target}</span>
+          <div class="meter" role="progressbar" aria-label="${quest.name}" aria-valuemin="0" aria-valuemax="${quest.target}" aria-valuenow="${progress}" style="--value:${progress / quest.target * 100}%"><span></span></div>
+        </div>
+        <div class="order-bottom"><span class="goal-reward">${reward(quest.reward)}</span>
+          ${button("Claim reward", "claim-quest", { className: "primary compact", disabled: !ready, extra: `data-id="${quest.id}"` })}</div>
+      </article>`;
+    }).join("");
+    return `${pageIntro("Grower Quests", "Build a complete collection, grow a breeding legacy, and prepare your finest plants for exhibition.", "trophy",
+      `<span class="count-pill">${state.quests.claimed.length} / ${total} quests completed</span>`)}
+      <section aria-label="Quest chains"><div class="quest-grid">${quests}</div></section>
+      <section aria-labelledby="exhibitions-title">
+        <div class="section-heading listing-heading"><h2 id="exhibitions-title">Conservatory exhibitions</h2>
+          <span class="count-pill">${countSpecies() < 12 ? "Unlock at 12 species" : "Entries refresh at local midnight"}</span></div>
+        <p class="section-description">Each entry needs different species. Your best qualifying plants take part and stay in your collection. Earn a ribbon and a permanent 5% display-income bonus for each exhibition you win for the first time.</p>
+        <div class="exhibition-grid">${Object.entries(EXHIBITIONS).map(([id, exhibition]) => {
+          const status = G.exhibitionStatus(state, id, now);
+          const message = !status.unlocked ? "Discover 12 species to enter" : status.enteredToday ?
+            `Enter again in ${countdown(G.nextOrderDay(now))}` : `${status.participants.length} / ${status.target} qualifying species`;
+          return `<article class="paper exhibition-card" data-exhibition="${id}">
+            <div class="goal-top"><span class="tile-icon">${icon(exhibition.icon)}</span>
+              ${status.wins ? `<span class="count-pill ribbon">${icon("trophy")} ${status.wins} ${status.wins === 1 ? "win" : "wins"}</span>` : ""}</div>
+            <h3>${exhibition.name}</h3><p>${exhibition.description} Enter ${status.target} different species.</p>
+            <div class="exhibition-plants">${status.participants.map(plant =>
+              `<span class="shelf-preview" title="${plantName(plant)}">${canvas(SPECIES[plant.species], plant)}</span>`).join("") ||
+              `<span class="exhibition-empty">${icon("leaf")} Grow your exhibition collection</span>`}</div>
+            <small>${message}</small>
+            <div class="order-bottom"><span class="goal-reward">${reward(status.reward)}</span>
+              ${button("Enter exhibition", "enter-exhibition", {
+                className: "primary compact", disabled: !status.ready, extra: `data-id="${id}"`,
+              })}</div>
+          </article>`;
+        }).join("")}</div>
+      </section>`;
   }
 
   function market(now) {
@@ -469,6 +555,7 @@
           ${button(coins(displayCost), "buy-display", { extra: `aria-label="Buy one display spot for ${displayCost} coins"`, disabled: state.coins < displayCost })}</article>
         ${supplies}
       </div>
+      ${automationShop()}
       <section aria-labelledby="stock-title">
         <div class="section-heading listing-heading"><div class="heading-with-count"><h2 id="stock-title">Plants for sale</h2>
           <span class="count-pill">${icon("clock")} Restock in ${countdown(G.nextRestock(state, now))}</span></div>${rarityFilter("marketFilter", view.marketFilter)}</div>
@@ -626,16 +713,21 @@
 
   function guide() {
     const filtered = CATALOG.filter(species => view.guideFilter === "all" || String(species.tier) === view.guideFilter);
-    const stock = filtered.filter(species => G.speciesUnlocked(state, species));
-    const hidden = filtered.length - stock.length;
+    const hasDiscovered = species => state.discovered.some(key => key.startsWith(species.id + ":"));
+    const hidden = filtered.filter(species => !hasDiscovered(species)).length;
     const discovered = countSpecies();
     return `${pageIntro("Field Guide", "Track the species and phenotypes you discover as you grow your collection.", "book",
       `<div class="guide-count"><strong>${discovered} / ${CATALOG.length}</strong><span>Species discovered</span>
         <div class="meter" aria-hidden="true" style="--value:${100 * discovered / CATALOG.length}%"><span></span></div></div>`)}
       <section aria-labelledby="catalog-title">
         <div class="section-heading listing-heading"><div class="heading-with-count"><h2 id="catalog-title">Plant catalog</h2><span class="count-pill">${state.discovered.length} / ${totalPhenotypes} phenotypes</span></div>${rarityFilter("guideFilter", view.guideFilter)}</div>
-        ${hidden ? `<p class="inline-note">${icon("lock")} ${hidden} hidden ${hidden === 1 ? "species awaits" : "species await"} discovery in the breeding room.</p>` : ""}
-        <div class="catalog-grid">${stock.map(species => {
+        ${hidden ? `<p class="inline-note">${icon("lock")} ${hidden} ${hidden === 1 ? "silhouette awaits" : "silhouettes await"} discovery.</p>` : ""}
+        <div class="catalog-grid">${filtered.map(species => {
+          if (!hasDiscovered(species)) return `<article class="paper catalog-card undiscovered-card">
+            <div class="catalog-art rarity-back-${species.tier}">${tierBadge(species)}<span class="plant-silhouette">${canvas(species, { size: 58 })}</span></div>
+            <div class="catalog-copy"><h3>Undiscovered plant</h3><p>Find it at the market or through breeding.</p>
+              ${button("Discover to reveal", "inspect", { symbol: "lock", className: "catalog-button", disabled: true })}</div>
+          </article>`;
           const found = species.phenotypes.map((_, i) => i).filter(i => state.discovered.includes(`${species.id}:${i}`));
           return `<article class="paper catalog-card">
             <div class="catalog-art rarity-back-${species.tier}">${tierBadge(species)}${canvas(species, { pheno: found[0] || 0 })}</div>
@@ -661,7 +753,7 @@
       else link.removeAttribute("aria-current");
     }
     const content = page === "market" ? market(now) : page === "orders" ? orders(now) :
-      page === "breeding" ? breeding(now) : page === "guide" ? guide() : greenhouse(now);
+      page === "breeding" ? breeding(now) : page === "guide" ? guide() : page === "quests" ? quests(now) : greenhouse(now);
     const html = `${content}<footer class="footer">${icon(storageWorks ? "check" : "info")} ${storageWorks ? "Progress saved on this browser" : "Browser saving is unavailable"}</footer>`;
     if (html !== view.markup) {
       view.markup = html;
@@ -748,7 +840,7 @@
         ["Maturity", `${percent(plant.size)}%`],
         ["Shape", `${plant.quality}/5`],
         ["Sale value", `${numberFormat.format(G.salePrice(plant))} coins`],
-        ["Display rate", hourlyCoins(G.displayRate(plant))],
+        ["Display rate", hourlyCoins(G.displayRate(plant, state))],
       ];
       return `<article class="compare-column">
         <label for="${id}">${label}</label>
@@ -1073,13 +1165,13 @@
   function showDisplaySwap(incoming) {
     openDialog("Swap a display plant", `<div class="portrait-display swap-preview">
         <span class="tile-icon">${icon("display")}</span><div class="display-rate"><small>${plantName(incoming)} if displayed</small>
-          <strong>${hourlyCoins(G.displayRate(incoming))}</strong></div>
+          <strong>${hourlyCoins(G.displayRate(incoming, state))}</strong></div>
       </div>
       <p>Choose which plant to replace.</p>
       <div class="delivery-options">${G.displayedPlants(state).map(plant => {
         return button(`<span>${plantName(plant)} #${plant.id}<small>${plantDetail(plant)}</small></span>
-          <span class="count-pill">${hourlyCoins(G.displayRate(plant))}</span>`, "swap-display", {
-          className: "delivery-option", extra: `data-id="${plant.id}" data-plant="${incoming.id}" aria-label="Replace ${plantName(plant)} number ${plant.id}, earning ${hourlyCoins(G.displayRate(plant))}"`,
+          <span class="count-pill">${hourlyCoins(G.displayRate(plant, state))}</span>`, "swap-display", {
+          className: "delivery-option", extra: `data-id="${plant.id}" data-plant="${incoming.id}" aria-label="Replace ${plantName(plant)} number ${plant.id}, earning ${hourlyCoins(G.displayRate(plant, state))}"`,
         });
       }).join("")}</div>`);
   }
@@ -1267,11 +1359,29 @@
         if (!outgoing || !G.setDisplay(state, incoming, outgoing)) return "That display spot changed. Choose again.";
         return confirmed(`${SPECIES[incoming.species].name} is on display.`, [".income-card"], [".portrait-display"]);
       }
+      case "buy-automation":
+        if (!G.buyAutomation(state, id)) return "This automation is unavailable.";
+        return confirmed(`${AUTOMATIONS[id].name} enabled.`, [`[data-automation="${id}"]`], walletMotion);
+      case "toggle-automation":
+        if (!G.toggleAutomation(state, id)) return;
+        return confirmed(`${AUTOMATIONS[id].name} ${state.automation[id].enabled ? "enabled" : "paused"}.`,
+          [`[data-automation="${id}"]`], [".income-card"]);
+      case "buy-promotion":
+        if (!G.buyPromotion(state)) return "This upgrade is unavailable.";
+        return confirmed("Visitor programme upgraded. Display earnings increased.", ['[data-automation="promotion"]'], walletMotion);
+      case "claim-quest": {
+        const payout = G.claimQuest(state, id);
+        if (!payout) return;
+        return confirmed(`Quest completed. You earned ${payout} coins.`, [`[data-quest-track="${id.split("-")[0]}"]`, "arrival"], walletMotion);
+      }
+      case "enter-exhibition": {
+        const payout = G.enterExhibition(state, id, now);
+        if (!payout) return "This exhibition entry is unavailable.";
+        return confirmed(`Exhibition won. You earned ${payout} coins.`, [`[data-exhibition="${id}"]`], walletMotion);
+      }
       case "collect": {
-        const available = Math.floor(state.displayBank + .0000001);
+        const available = G.collectDisplayCoins(state);
         if (available < 1) return;
-        state.displayBank = Math.max(0, state.displayBank - available);
-        state.coins += available;
         return confirmed(`Collected ${available} ${available === 1 ? "coin" : "coins"}.`, walletMotion, [".income-card"]);
       }
       case "sell":
@@ -1390,6 +1500,7 @@
     advanceTo(now);
     const result = perform(action, data, now, plantId);
     trackRecovery();
+    G.curateDisplays(state);
     save();
     render();
     if (scroll !== null && window.scrollY !== scroll) window.scrollTo(0, scroll);

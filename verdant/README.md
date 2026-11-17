@@ -39,9 +39,18 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - The Market refreshes every five minutes. Golden Pothos is always available alongside four rotating Common plants. Uncommon, Rare, and Legendary plants appear in limited quantities, and rarer species appear less often. Buying a species for the first time adds it to the Field Guide.
 - The catalog contains 40 species, including bonsai and other woody plants.
 
+## Quests, automation, and exhibitions
+
+- The Field Guide shows every species as a silhouette until you discover it. Revealed entries stay in your guide after selling a plant.
+- Open **Quests** to follow 20 quests across collection, breeding, pruning, and collector orders. Existing discoveries and potted offspring count. Earlier order deliveries count when they are still represented in the saved order board.
+- The Market sells a **Coin collector** for 120 coins after discovering four species. It transfers whole display coins into your wallet, including during offline catch-up.
+- A **Display curator** costs 360 coins and unlocks at ten species. It places your highest-earning plants on display and rechecks them during catch-up. Use Pause to arrange displays yourself. Manually changing a display also pauses the curator.
+- At 20 discovered species, buy up to three **Visitor programme** levels. They cost 600, 1,200, and 2,400 coins and each add 10% to display earnings.
+- Discover 12 species to unlock three **Conservatory exhibitions** on the Quests page. Grow different qualifying species, then enter to earn coins and a permanent 5% display-income bonus for the first win in each category. Plants stay in your collection. Enter each category once per local day, with larger collections required as you win repeatedly.
+
 ## Artwork and typography
 
-The built-in image generator created the greenhouse banner at `assets/greenhouse.jpg`. The plant illustrations are drawn in the browser and respond to growth, health, and phenotype. As plants mature, they fill out with new foliage, branches, or leaf rings, depending on the species. DM Sans and Instrument Serif are included under their respective SIL Open Font Licenses in \x60assets/fonts/\x60.
+The built-in image generator created the greenhouse banner at `assets/greenhouse.jpg`. The plant illustrations are drawn in the browser and respond to growth, health, and phenotype. As plants mature, they fill out with new foliage, branches, or leaf rings, depending on the species. DM Sans and Instrument Serif are included under their respective SIL Open Font Licenses in `assets/fonts/`.
 
 <details>
 <summary>Banner prompt</summary>

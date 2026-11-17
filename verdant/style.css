@@ -57,7 +57,7 @@ button[disabled] { cursor: default; }
 .topbar-inner, #app { width: min(calc(100% - 72px), 1248px); margin-inline: auto; }
 .topbar-inner {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-height: 76px;
   align-items: center;
   gap: 22px;
@@ -69,9 +69,9 @@ button[disabled] { cursor: default; }
   background: linear-gradient(153deg, #ecf0c9, #aebe8c); box-shadow: 0 3px 8px #101d1a61;
 }
 .brand-icon svg { width: 23px; height: 23px; }
-nav { display: flex; align-items: center; gap: 6px; }
+nav { display: flex; align-items: center; justify-content: center; gap: 4px; }
 nav a {
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 13px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 10px;
   border-radius: 9px; color: #e1ebd9; font-weight: 650; font-size: .85rem; white-space: nowrap;
 }
 nav a svg { width: 17px; height: 17px; }
@@ -358,6 +358,7 @@ nav a[aria-current] { color: #203d30; background: #dce9cb; box-shadow: inset 0 0
 .intro-shop { --intro-base: #343c29; --intro-edge: #68774a; --intro-accent: #f4dfaa; }
 .intro-clipboard { --intro-base: #403824; --intro-edge: #6b6241; --intro-accent: #f9dfad; }
 .intro-dna { --intro-base: #163d36; --intro-edge: #417968; --intro-accent: #d2ede0; }
+.intro-trophy { --intro-base: #35452a; --intro-edge: #7c7848; --intro-accent: #fff0bb; }
 .intro-book { --intro-base: #254430; --intro-edge: #586c43; --intro-accent: #edf2c0; }
 .intro-heading { display: flex; align-items: flex-start; min-width: 0; gap: 13px; }
 .intro-heading > div { min-width: 0; }
@@ -404,6 +405,34 @@ select { width: 100%; background: var(--paper); border: 1px solid #d2dfce; borde
 .rarity-back-1 { --catalog-light: #edffed; --catalog-base: #cbe6e0; --catalog-floor: #afcdc8; }
 .rarity-back-2 { --catalog-light: #fff1f7; --catalog-base: #e2d8ed; --catalog-floor: #c9bbd5; }
 .rarity-back-3 { --catalog-light: #fff2ca; --catalog-base: #e8d8ad; --catalog-floor: #cdbb8a; }
+.plant-silhouette { display: grid; place-items: end center; width: 100%; height: 100%; }
+.plant-silhouette .plant-art { filter: brightness(0) saturate(0); opacity: .32; }
+.undiscovered-card .catalog-copy h3 { color: #5e6d5b; }
+.undiscovered-card .catalog-art { background: radial-gradient(at top, #eef2e6, #dce5d8); }
+.automation-status { color: var(--muted); font-size: .72rem; }
+.automation-grid, .exhibition-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.automation-card {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; padding: 15px; align-content: start;
+  background: linear-gradient(135deg, #fffef6, #edf5e8);
+}
+.automation-card h3 { font-size: 28px; }
+.automation-card p, .exhibition-card p { font-size: .81rem; color: var(--muted); margin-top: 5px; }
+.automation-card small { display: block; margin-top: 6px; color: var(--green); font-size: .74rem; }
+.automation-card > .button, .automation-card > .count-pill { grid-column: 2; justify-self: start; margin-top: 4px; }
+.automation-card [aria-pressed="true"] { background: #dcebd5; border-color: #a4bea0; }
+.quest-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin-top: 19px; }
+.quest-card { display: flex; flex-direction: column; padding: 17px; background: linear-gradient(135deg, #fffef5, #edf4e6); min-width: 0; }
+.quest-card h2 { font-size: 31px; margin: 10px 0 6px; }
+.quest-card p { color: var(--muted); font-size: .85rem; }
+.quest-card .count-pill { white-space: normal; text-align: right; }
+.quest-progress { margin: auto 0 12px; padding-top: 11px; color: var(--green); font-size: .76rem; font-variant-numeric: tabular-nums; }
+.exhibition-card { display: flex; flex-direction: column; padding: 16px; background: radial-gradient(at top right, #f5e8c4, transparent 75%), var(--paper); }
+.exhibition-card h3 { font-size: 30px; margin-top: 10px; }
+.exhibition-card small { display: block; color: var(--muted); font-size: .74rem; margin: 8px 0; }
+.exhibition-plants { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 10px; margin-top: auto; }
+.exhibition-plants .shelf-preview { width: 47px; height: 45px; }
+.exhibition-empty { display: flex; align-items: center; gap: 6px; color: var(--muted); min-height: 45px; font-size: .77rem; }
+.ribbon { color: #7e551a; background: #faecc1; }
 .catalog-art .badge { position: absolute; z-index: 1; top: 10px; left: 10px; outline: 1px solid #fff9; }
 .catalog-art .plant-art { width: min(100%, 216px); transition: transform .21s ease; transform-origin: 50% 83%; }
 .catalog-card:hover .plant-art { transform: scale(1.035); }
@@ -661,9 +690,11 @@ dialog::backdrop { background: #0a241c99; backdrop-filter: blur(4px); }
   .income-card { margin-top: 0; }
   .catalog-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .breeding-grid { grid-template-columns: 1fr; }
+  .exhibition-grid { grid-template-columns: 1fr; }
+  .automation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 690px) {
-  .order-grid { grid-template-columns: 1fr; gap: 8px; }
+  .order-grid, .quest-grid { grid-template-columns: 1fr; gap: 8px; }
   .station-grid { grid-template-columns: 1fr; gap: 8px; }
   .care-card { grid-template-columns: 1fr; gap: 8px; }
   .plant-scene { --scene-height: 242px; }
@@ -674,8 +705,10 @@ dialog::backdrop { background: #0a241c99; backdrop-filter: blur(4px); }
   .brand { font-size: 32px; gap: 7px; }
   .brand-icon { width: 31px; height: 31px; }
   .brand-icon svg { width: 19px; height: 19px; }
-  nav { gap: 2px; justify-content: space-between; }
-  nav a { flex: 1 1 auto; flex-direction: column; gap: 3px; padding: 5px 2px; font-size: .67rem; }
+  nav { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; }
+  nav a { min-width: 0; flex-direction: column; gap: 3px; padding: 5px 0; font-size: .58rem; }
+  .listing-heading { flex-wrap: wrap; }
+  .automation-grid { grid-template-columns: 1fr; }
   #app { padding-top: 14px; }
   .hero { min-height: 82px; border-radius: 14px; background-position: 49% center; }
   .hero::before { background: linear-gradient(90deg, #0a231be0, #12211053); }

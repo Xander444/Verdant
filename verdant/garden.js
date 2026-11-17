@@ -198,6 +198,17 @@ window.Garden = (() => {
     if (!state.discovered.includes(key)) state.discovered.push(key);
   }
 
+  function initializeProgression(state) {
+    state.automation ??= {};
+    state.promotionLevel ??= 0;
+    state.quests ??= { claimed: [] };
+    state.exhibitions ??= {};
+    state.stats ??= {};
+    state.stats.ordersCompleted ??= state.orders?.refills ?? 0;
+    state.stats.displayEarned ??= Math.max(0, state.displayBank || 0);
+    return state;
+  }
+
   function fresh(now) {
     const state = {
       version: 1, updatedAt: now, coins: 36, displayBank: 0, displaySpots: STARTING_DISPLAY_SPOTS, capacity: STARTING_SHELF_SPACE, shelfUpgrades: 0,
@@ -209,7 +220,7 @@ window.Garden = (() => {
     const plant = makePlant(state, "golden", 0, now, "starter");
     state.plants.push(plant);
     discover(state, plant);
-    return state;
+    return initializeProgression(state);
   }
 
   function addPlant(state, species, pheno, now, source, traits) {
@@ -255,11 +266,16 @@ window.Garden = (() => {
     return true;
   }
 
-  function displayRate(plant) {
+  function displayMultiplier(state) {
+    const ribbons = Object.keys(EXHIBITIONS).filter(id => state?.exhibitions?.[id]?.wins > 0).length;
+    return 1 + (state?.promotionLevel ?? 0) * .1 + ribbons * .05;
+  }
+
+  function displayRate(plant, state) {
     const tier = SPECIES[plant.species].tier;
     return [.38, .86, 1.84, 3.5][tier] *
       (1 + (plant.size / 60) ** 2 + plant.quality * .52) *
-      (.38 + .62 * plant.health / 100) * (1 + plant.pheno * .055);
+      (.38 + .62 * plant.health / 100) * (1 + plant.pheno * .055) * displayMultiplier(state);
   }
 
   function displayedPlants(state) {
@@ -294,6 +310,7 @@ window.Garden = (() => {
     if (!state.plants.includes(plant)) return false;
     if (plant.onDisplay && !replace) {
       plant.onDisplay = false;
+      pauseCurator(state);
       return true;
     }
     if (plant.onDisplay) return false;
@@ -304,6 +321,7 @@ window.Garden = (() => {
       return false;
     }
     plant.onDisplay = true;
+    pauseCurator(state);
     return true;
   }
 
@@ -429,6 +447,7 @@ window.Garden = (() => {
   }
 
   function advance(state, now) {
+    initializeProgression(state);
     if (now <= state.updatedAt) return;
     let cursor = Math.max(state.updatedAt, now - 7 * 24 * HOUR);
     while (cursor < now) {
@@ -439,6 +458,7 @@ window.Garden = (() => {
       const next = Math.min(now, edge);
       const hours = (next - cursor) / HOUR;
       const phase = phaseAt(cursor);
+      curateDisplays(state);
       for (const plant of state.plants) {
         const species = SPECIES[plant.species];
         const tier = species.tier;
@@ -457,7 +477,11 @@ window.Garden = (() => {
           (lightWorks(plant, cursor, plant.location, state) ? 0 : [.16, .42, .75, 1.18][tier]);
         const change = stress ? -stress * (1 + tier * .14) : (plant.health < 90 ? 2.65 : .65);
         const health = clamp(plant.health + change * hours / 2, 10);
-        if (plant.onDisplay) state.displayBank += displayRate({ ...plant, health }) * hours;
+        if (plant.onDisplay) {
+          const income = displayRate({ ...plant, health }, state) * hours;
+          state.displayBank += income;
+          state.stats.displayEarned += income;
+        }
         const growthFactor = stress ? .23 : plant.location === GROW_LAMP ? growLampEffects(cursor, state).growth : 1;
         const grow = health >= 60
           ? growthFactor * phase.growth * (1 + nutrients / 160) * (1 + .10 * plant.quality) / (1 + .16 * tier)
@@ -471,6 +495,8 @@ window.Garden = (() => {
       }
       cursor = next;
     }
+    curateDisplays(state);
+    if (state.automation.collector?.enabled) collectDisplayCoins(state);
     state.updatedAt = now;
   }
 
@@ -629,6 +655,7 @@ window.Garden = (() => {
   function deliverOrder(state, order, plant) {
     const index = state.orders.entries.indexOf(order);
     if (index < 0 || order.fulfilled || !state.plants.includes(plant) || !orderMatches(order, plant)) return 0;
+    initializeProgression(state);
     const replacement = makeOrder(state, order.slot, order);
     const payout = salePrice(plant) + order.bonus;
     state.coins += payout;
@@ -636,6 +663,7 @@ window.Garden = (() => {
     order.fulfilled = true;
     order.pinned = false;
     state.orders.entries[index] = replacement;
+    state.stats.ordersCompleted++;
     return payout;
   }
 
@@ -770,6 +798,192 @@ window.Garden = (() => {
   }
 
   const discoveredCount = state => new Set(state.discovered.map(key => key.split(":")[0])).size;
+  const AUTOMATIONS = {
+    collector: {
+      name: "Coin collector", cost: 120, species: 4, icon: "coin",
+      description: "Transfers whole display coins into your wallet automatically, including while you are away.",
+    },
+    curator: {
+      name: "Display curator", cost: 360, species: 10, icon: "display",
+      description: "Keeps your highest-earning plants on display. Manual display changes pause the curator.",
+    },
+  };
+
+  function collectDisplayCoins(state) {
+    const amount = Math.floor(state.displayBank + .0000001);
+    if (amount < 1) return 0;
+    state.displayBank = Math.max(0, state.displayBank - amount);
+    state.coins += amount;
+    return amount;
+  }
+
+  function pauseCurator(state) {
+    if (state.automation?.curator) state.automation.curator.enabled = false;
+  }
+
+  function curateDisplays(state) {
+    if (!state.automation?.curator?.enabled) return;
+    const ranked = [...state.plants].sort((a, b) => displayRate(b, state) - displayRate(a, state) || a.id - b.id);
+    const selected = new Set(ranked.slice(0, displayCapacity(state)).map(plant => plant.id));
+    for (const plant of state.plants) plant.onDisplay = selected.has(plant.id);
+  }
+
+  function buyAutomation(state, id) {
+    initializeProgression(state);
+    const upgrade = Object.hasOwn(AUTOMATIONS, id) && AUTOMATIONS[id];
+    if (!upgrade || state.automation[id] || discoveredCount(state) < upgrade.species || state.coins < upgrade.cost) return false;
+    state.coins -= upgrade.cost;
+    state.automation[id] = { enabled: true };
+    curateDisplays(state);
+    if (state.automation.collector?.enabled) collectDisplayCoins(state);
+    return true;
+  }
+
+  function toggleAutomation(state, id) {
+    const upgrade = state.automation?.[id];
+    if (!Object.hasOwn(AUTOMATIONS, id) || !upgrade) return false;
+    upgrade.enabled = !upgrade.enabled;
+    curateDisplays(state);
+    if (state.automation.collector?.enabled) collectDisplayCoins(state);
+    return true;
+  }
+
+  function promotionCost(state) {
+    const level = state.promotionLevel ?? 0;
+    return level >= 3 ? null : 600 * 2 ** level;
+  }
+
+  function buyPromotion(state) {
+    initializeProgression(state);
+    const cost = promotionCost(state);
+    if (cost === null || discoveredCount(state) < 20 || state.coins < cost) return false;
+    state.coins -= cost;
+    state.promotionLevel++;
+    return true;
+  }
+
+  const QUEST_TRACKS = [
+    {
+      id: "collection", name: "Botanical explorer", icon: "book",
+      steps: [
+        { name: "First discoveries", description: "Discover 5 species.", metric: "species", target: 5, reward: 35 },
+        { name: "A growing field guide", description: "Discover 12 species.", metric: "species", target: 12, reward: 90 },
+        { name: "A living library", description: "Discover 24 species.", metric: "species", target: 24, reward: 220 },
+        { name: "Every silhouette revealed", description: "Discover all 40 species.", metric: "species", target: 40, reward: 500 },
+        { name: "A complete botanical record", description: "Discover all 204 phenotypes.", metric: "phenotypes", target: 204, reward: 1200 },
+      ],
+    },
+    {
+      id: "breeding", name: "Patient breeder", icon: "dna",
+      steps: [
+        { name: "First generation", description: "Pot your first cross-bred seedling.", metric: "crosses", target: 1, reward: 25 },
+        { name: "Family nursery", description: "Pot 5 cross-bred seedlings.", metric: "crosses", target: 5, reward: 65 },
+        { name: "Branching families", description: "Pot 15 cross-bred seedlings.", metric: "crosses", target: 15, reward: 150 },
+        { name: "Generations of growth", description: "Pot 30 cross-bred seedlings.", metric: "crosses", target: 30, reward: 330 },
+        { name: "A breeder’s legacy", description: "Pot 60 cross-bred seedlings.", metric: "crosses", target: 60, reward: 700 },
+      ],
+    },
+    {
+      id: "craft", name: "Plant sculptor", icon: "prune",
+      steps: [
+        { name: "A practiced hand", description: "Keep a plant pruned to Shape 2.", metric: "shape", target: 2, reward: 30 },
+        { name: "Perfect form", description: "Keep a plant pruned to Shape 5.", metric: "shape", target: 5, reward: 90 },
+        { name: "A pair of living sculptures", description: "Own 2 mature trees with 80% health and Shape 3.", metric: "trainedTrees", target: 2, reward: 180 },
+        { name: "Master bonsai collection", description: "Own 3 mature trees with 85% health and Shape 5.", metric: "masterTrees", target: 3, reward: 400 },
+        { name: "The miniature forest", description: "Discover all 8 tree species.", metric: "treeSpecies", target: 8, reward: 650 },
+      ],
+    },
+    {
+      id: "orders", name: "Nursery enterprise", icon: "clipboard",
+      steps: [
+        { name: "First commissions", description: "Complete 3 collector orders.", metric: "orders", target: 3, reward: 35 },
+        { name: "A trusted grower", description: "Complete 12 collector orders.", metric: "orders", target: 12, reward: 100 },
+        { name: "A busy nursery", description: "Complete 30 collector orders.", metric: "orders", target: 30, reward: 250 },
+        { name: "A flourishing display", description: "Earn 1,000 coins from plant displays.", metric: "displayIncome", target: 1000, reward: 500 },
+        { name: "A garden of renown", description: "Earn 5,000 coins from plant displays.", metric: "displayIncome", target: 5000, reward: 1000 },
+      ],
+    },
+  ];
+
+  function questProgress(state, quest) {
+    switch (quest.metric) {
+      case "species": return discoveredCount(state);
+      case "phenotypes": return state.discovered.length;
+      case "crosses": return state.journal.filter(entry => entry.source !== "cutting" && entry.parents?.length === 2).length;
+      case "shape": return state.plants.reduce((best, plant) => Math.max(best, plant.quality), 0);
+      case "trainedTrees": return state.plants.filter(plant =>
+        SPECIES[plant.species].shape === "tree" && plant.size >= 83 && plant.health >= 80 && plant.quality >= 3).length;
+      case "masterTrees": return state.plants.filter(plant =>
+        SPECIES[plant.species].shape === "tree" && plant.size >= 83 && plant.health >= 85 && plant.quality === 5).length;
+      case "treeSpecies": return CATALOG.filter(species =>
+        species.shape === "tree" && state.discovered.some(key => key.startsWith(species.id + ":"))).length;
+      case "orders": return state.stats?.ordersCompleted ?? 0;
+      case "displayIncome": return Math.floor(state.stats?.displayEarned ?? 0);
+    }
+  }
+
+  function activeQuest(state, track) {
+    const index = track.steps.findIndex((_, i) => !state.quests.claimed.includes(track.id + "-" + i));
+    return index < 0 ? null : { ...track.steps[index], id: track.id + "-" + index, index };
+  }
+
+  function claimQuest(state, id) {
+    initializeProgression(state);
+    const quest = QUEST_TRACKS.map(track => activeQuest(state, track)).find(item => item?.id === id);
+    if (!quest || questProgress(state, quest) < quest.target) return 0;
+    state.quests.claimed.push(id);
+    state.coins += quest.reward;
+    return quest.reward;
+  }
+
+  const EXHIBITIONS = {
+    common: {
+      name: "Common masterpieces", icon: "leaf", reward: 120,
+      description: "Common plants at 90% maturity, 85% health, and Shape 5.",
+      test: plant => SPECIES[plant.species].tier === 0 && plant.size >= 90 && plant.health >= 85 && plant.quality === 5,
+    },
+    bonsai: {
+      name: "The miniature forest", icon: "branch", reward: 240,
+      description: "Trees at 83% maturity, 80% health, and Shape 4.",
+      test: plant => SPECIES[plant.species].shape === "tree" && plant.size >= 83 && plant.health >= 80 && plant.quality >= 4,
+    },
+    rare: {
+      name: "Rare canopy", icon: "star", reward: 360,
+      description: "Rare or Legendary plants at 75% maturity, 80% health, and Shape 2.",
+      test: plant => SPECIES[plant.species].tier >= 2 && plant.size >= 75 && plant.health >= 80 && plant.quality >= 2,
+    },
+  };
+
+  function exhibitionStatus(state, id, now) {
+    const exhibition = Object.hasOwn(EXHIBITIONS, id) && EXHIBITIONS[id];
+    if (!exhibition) return null;
+    const record = state.exhibitions?.[id];
+    const wins = record?.wins ?? 0;
+    const target = Math.min(5, 3 + Math.floor(wins / 2));
+    const ranked = state.plants.filter(exhibition.test).sort((a, b) => displayRate(b, state) - displayRate(a, state));
+    const unique = new Map();
+    for (const plant of ranked) if (!unique.has(plant.species)) unique.set(plant.species, plant);
+    const participants = [...unique.values()].slice(0, target);
+    const unlocked = discoveredCount(state) >= 12;
+    const enteredToday = record && localDay(now) <= record.lastDay;
+    return {
+      participants, target, wins, unlocked, enteredToday,
+      ready: unlocked && !enteredToday && participants.length === target,
+      reward: exhibition.reward + 20 * Math.min(wins, 10),
+    };
+  }
+
+  function enterExhibition(state, id, now) {
+    initializeProgression(state);
+    const status = exhibitionStatus(state, id, now);
+    if (!status?.ready) return 0;
+    state.coins += status.reward;
+    state.exhibitions[id] = {
+      wins: status.wins + 1, lastDay: localDay(now), participants: status.participants.map(portrait),
+    };
+    return status.reward;
+  }
+
   const GOALS = [
     { name: "A second chance", description: "Water, move, and prune your pothos to reach 72% health.", reward: 14, test: s => s.history.recovered },
     { name: "Make room for company", description: "Buy a plant from the market.", reward: 8, test: s => s.history.bought },
@@ -783,6 +997,9 @@ window.Garden = (() => {
   return {
     MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES, GROW_LAMP, GROW_LAMP_SLOTS,
     CATALOG, SPECIES, SUPPLIES, GOALS, POT_STYLES, SOIL_MIXES, clamp, traitsFor, traitScales,
+    initializeProgression, AUTOMATIONS, buyAutomation, toggleAutomation, curateDisplays, collectDisplayCoins,
+    displayMultiplier, promotionCost, buyPromotion, QUEST_TRACKS, activeQuest, questProgress, claimQuest,
+    EXHIBITIONS, exhibitionStatus, enterExhibition, discoveredCount,
     potStyle, soilMix, repotCost, repotPlant, renamePlant, familyFor, lastCrossResult,
     phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, upgradeSavedShelves, shelfCost, buyShelfUpgrade, freeSlots,
     hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, displayCapacity, displaySpotCost, buyDisplaySpot,
