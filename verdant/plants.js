@@ -552,11 +552,23 @@ window.PlantArt = (() => {
     if (species.shape === "tree") ctx.scale(1.17, .58);
     pot(ctx, species.tier);
     ctx.restore();
-    const scale = .72 + plant.size * .004;
+    const scale = (.72 + plant.size * .004) * (Number(canvas.dataset.form) || 1);
+    const leafScale = Number(canvas.dataset.leaf) || 1;
     ctx.translate(0, 3);
     ctx.scale(scale, scale);
+    const leaves = removedLeaves ? [] : null;
+    const tips = drawCanopy(ctx, species, plant, (_, x, y, angle, length, width, style, palette, random) => {
+      const bladeLength = length * (.45 + leafScale * .55);
+      const bladeWidth = width * leafScale;
+      if (leaves) {
+        const textureSeed = Math.floor(random() * 4294967296);
+        leaves.push({ x, y, angle, length: bladeLength, width: bladeWidth, style, palette, textureSeed });
+      } else {
+        leaf(ctx, x, y, angle, bladeLength, bladeWidth, style, palette, random);
+      }
+    });
     if (!removedLeaves) {
-      const tip = drawCanopy(ctx, species, plant, leaf)?.[highlightBranch];
+      const tip = tips?.[highlightBranch];
       if (tip) {
         ctx.beginPath();
         ctx.arc(tip[0], tip[1] - 5, 13, 0, 2 * Math.PI);
@@ -571,11 +583,6 @@ window.PlantArt = (() => {
       return;
     }
 
-    const leaves = [];
-    drawCanopy(ctx, species, plant, (_, x, y, angle, length, width, style, palette, random) => {
-      const textureSeed = Math.floor(random() * 4294967296);
-      leaves.push({ x, y, angle, length, width, style, palette, textureSeed });
-    });
     const targets = pruningTargets(leaves, scale, pruningCutCount(plant));
     const marked = new Set(targets.map(point => point.id));
     const dryLeaf = {

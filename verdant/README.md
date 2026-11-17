@@ -16,12 +16,13 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - Use the **Watering can** to hold and pour until the soil moisture reaches the green range. You can also aim for the same range with **Start pouring** and **Stop pouring** using a mouse, touch, or keyboard.
 - Open **Prune** and snip each leaf as it is marked. Choose **Finish pruning** once all the cuts are done. A pruning session takes two to seven snips as the plant grows.
 - On a woody plant, open **Train branches** to select and bend a branch. Save the shape to keep the new silhouette.
-- Buy a second Common plant. Feed both with your starting fertilizer to bring them up to breeding size. You need an open shelf space, five coins, and two plants with at least 72% health and 42% growth to start a cross.
+- Buy a second Common plant. Feed both with your starting fertilizer. You need an open shelf space, five coins, and two plants with at least 72% health and 42% maturity to start a cross.
 - Pair two different plants of the same rarity for a chance at the next rarity. The Breeding Room shows the odds, and potting a new species adds it to the Field Guide. Breed two of the same species to discover new phenotypes.
 - The Breeding Journal records each potted seedling, its phenotype, and both parents. Use a saved pair again while both parents remain on your shelves and meet the breeding requirements.
 - When two plants of the same species have different phenotypes, you can favor one for the cross. The Breeding Room shows the updated odds and the journal remembers your choice.
-- Plants with at least 83% growth and 75% health can provide a cutting of the same phenotype. A cutting uses one nursery space and costs its parent 8 growth points. It roots in 20 to 75 minutes, depending on rarity.
-- Up to two plants can earn display coins at a time. Select **Swap onto display** to replace one when the display is full. Collect whole coins in the greenhouse. Large, healthy, well-pruned plants earn more and sell for more.
+- Offspring inherit differences in appearance from their parents, and these differences affect sale value. Cuttings retain the parent's inherited appearance.
+- Plants with at least 83% maturity and 75% health can provide a cutting of the same phenotype. A cutting uses one nursery space and costs its parent 8 maturity points. It roots in 20 to 75 minutes, depending on rarity.
+- Up to two plants can earn display coins at a time. Select **Swap onto display** to replace one when the display is full. Collect whole coins in the greenhouse. Mature, healthy, well-pruned plants earn and sell for more.
 - The device's local clock drives light, drying, growth, and germination. Plant care and display earnings catch up for up to seven days between visits. Progress saves in the browser you play in.
 
 ## Collector orders and market restocks

@@ -95,6 +95,35 @@ window.Garden = (() => {
   };
   const clamp = (n, min = 0, max = 100) => Math.max(min, Math.min(max, n));
 
+  function traitsFor(plant) {
+    if (plant.traits) return plant.traits;
+    // Give specimens from older saves a stable appearance and value.
+    let hash = 2166136261;
+    for (const character of [plant.species, plant.pheno, plant.id].join(":")) {
+      hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+    }
+    return {
+      stature: (hash >>> 0) % 101,
+      leafSize: ((hash ^ (hash >>> 13)) >>> 0) % 101,
+    };
+  }
+
+  function traitScales(plant) {
+    const { stature, leafSize } = traitsFor(plant);
+    return { form: .76 + stature * .0029, leaf: .73 + leafSize * .0053 };
+  }
+
+  function inheritTraits(a, b, random) {
+    const first = traitsFor(a);
+    const second = traitsFor(b);
+    const blend = (left, right) => {
+      const weight = .22 + random() * .56;
+      const variation = (random() - .5) * 14;
+      return clamp(Math.round(left * weight + right * (1 - weight) + variation));
+    };
+    return { stature: blend(first.stature, second.stature), leafSize: blend(first.leafSize, second.leafSize) };
+  }
+
   function phaseAt(now) {
     const date = new Date(now);
     return PHASES.find(phase => date.getHours() < phase.until);
@@ -107,12 +136,13 @@ window.Garden = (() => {
     return 1;
   }
 
-  function makePlant(state, speciesId, pheno, now, source) {
+  function makePlant(state, speciesId, pheno, now, source, traits) {
     const species = SPECIES[speciesId];
     const starter = source === "starter";
     const seedling = source === "seedling";
     return {
       id: state.nextId++, species: speciesId, pheno,
+      traits: traits ? { ...traits } : { stature: Math.round(Math.random() * 100), leafSize: Math.round(Math.random() * 100) },
       health: starter ? 38 : seedling ? 86 : 82,
       water: starter ? 19 : seedling ? 55 : 51,
       humidity: starter ? 50 : 68,
@@ -142,8 +172,8 @@ window.Garden = (() => {
     return state;
   }
 
-  function addPlant(state, species, pheno, now, source) {
-    const plant = makePlant(state, species, pheno, now, source);
+  function addPlant(state, species, pheno, now, source, traits) {
+    const plant = makePlant(state, species, pheno, now, source, traits);
     state.plants.push(plant);
     discover(state, plant);
     state.selected = plant.id;
@@ -152,7 +182,7 @@ window.Garden = (() => {
 
   function displayRate(plant) {
     const tier = SPECIES[plant.species].tier;
-    return [.19, .43, .92, 1.75][tier] *
+    return [.38, .86, 1.84, 3.5][tier] *
       (1 + (plant.size / 60) ** 2 + plant.quality * .52) *
       (.38 + .62 * plant.health / 100) * (1 + plant.pheno * .055);
   }
@@ -187,9 +217,11 @@ window.Garden = (() => {
 
   function salePrice(plant) {
     const tier = SPECIES[plant.species].tier;
+    const { stature, leafSize } = traitsFor(plant);
+    const specimenValue = 1 + stature * .0045 + leafSize * .003;
     return Math.max(2, Math.round([7, 18, 44, 105][tier] *
       (.5 + 3.1 * (plant.size / 100) ** 2 + .38 * plant.quality) *
-      (.38 + .62 * plant.health / 100) * (1 + plant.pheno * .09)));
+      (.38 + .62 * plant.health / 100) * (1 + plant.pheno * .09) * specimenValue));
   }
 
   function careNeeds(plant, now) {
@@ -451,7 +483,7 @@ window.Garden = (() => {
   }
 
   function parentProblem(plant, now) {
-    if (plant.size < 42) return "Needs 42% growth";
+    if (plant.size < 42) return "Needs 42% maturity";
     if (plant.health < 72) return "Needs 72% health";
     if (plant.bredUntil > now) return "Recovering after breeding";
     return "";
@@ -505,7 +537,8 @@ window.Garden = (() => {
       : Math.floor(random() * species.phenotypes.length);
     const duration = [4, 6, 10, 16][species.tier] * MINUTE;
     const parents = [a, b].map(({ id, species, pheno }) => ({ id, species, pheno }));
-    const seed = { id: state.nextId++, species: species.id, pheno, readyAt: now + duration, parents, favoredParentId };
+    const traits = inheritTraits(a, b, random);
+    const seed = { id: state.nextId++, species: species.id, pheno, readyAt: now + duration, parents, favoredParentId, traits };
     state.seeds.push(seed);
     state.coins -= CROSS_COST;
     a.bredUntil = b.bredUntil = now + duration + 3 * MINUTE;
@@ -513,7 +546,7 @@ window.Garden = (() => {
   }
 
   function cuttingProblem(plant, now) {
-    if (plant.size < 83) return "Needs 83% growth";
+    if (plant.size < 83) return "Needs 83% maturity";
     if (plant.health < 75) return "Needs 75% health";
     if ((plant.cutUntil || 0) > now) return "Recovering from its last cutting";
     return "";
@@ -528,7 +561,7 @@ window.Garden = (() => {
     const { id, species, pheno } = plant;
     const cutting = {
       id: state.nextId++, species, pheno, readyAt: now + rootingTime(plant),
-      source: "cutting", parents: [{ id, species, pheno }],
+      source: "cutting", parents: [{ id, species, pheno }], traits: { ...traitsFor(plant) },
     };
     state.seeds.push(cutting);
     plant.size -= 8;
@@ -539,11 +572,14 @@ window.Garden = (() => {
   function potSeed(state, seed, now) {
     if (!seed || seed.readyAt > now || !state.seeds.includes(seed)) return null;
     state.seeds = state.seeds.filter(item => item.id !== seed.id);
-    const plant = addPlant(state, seed.species, seed.pheno, now, "seedling");
+    const parents = (seed.parents ?? []).map(parent => state.plants.find(item => item.id === parent.id) || parent);
+    const traits = seed.traits ?? (parents.length === 2
+      ? inheritTraits(parents[0], parents[1], () => .5) : traitsFor(parents[0] ?? seed));
+    const plant = addPlant(state, seed.species, seed.pheno, now, "seedling", traits);
     state.journal.unshift({
       id: plant.id, species: plant.species, pheno: plant.pheno, parents: seed.parents || [], pottedAt: now,
       favoredParentId: seed.favoredParentId ?? null,
-      source: seed.source,
+      source: seed.source, traits: { ...traits },
     });
     if (seed.source === "cutting") return plant;
     state.history.harvested = true;
@@ -564,7 +600,7 @@ window.Garden = (() => {
 
   return {
     MINUTE, HOUR, CROSS_COST, DISPLAY_LIMIT, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES,
-    CATALOG, SPECIES, SUPPLIES, GOALS, clamp,
+    CATALOG, SPECIES, SUPPLIES, GOALS, clamp, traitsFor, traitScales,
     phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
     hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, enforceDisplayLimit, setDisplay,
     pruningReadyAt, canPrune, pruningCutCount, prunePlant,

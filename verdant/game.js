@@ -61,8 +61,11 @@
   const currentPage = () => ["greenhouse", "market", "orders", "breeding", "guide"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "greenhouse";
   const button = (label, action, { symbol, extra = "", className = "", disabled = false } = {}) =>
     `<button type="button" class="button ${className}" data-action="${action}" ${extra}${disabled ? " disabled" : ""}>${symbol ? icon(symbol) : ""}${label}</button>`;
-  const canvas = (species, { pheno = 0, size = 58, health = 95, quality = 0, training, large = false } = {}) =>
-    `<canvas class="plant-art" width="${large ? 680 : 340}" height="${large ? 610 : 305}" data-species="${species.id}" data-pheno="${pheno}" data-size="${percent(size)}" data-health="${percent(health)}" data-quality="${quality}"${training ? ` data-training="${G.branchAngles({ training }).join(",")}"` : ""} aria-hidden="true"></canvas>`;
+  function canvas(species, { id, traits, pheno = 0, size = 58, health = 95, quality = 0, training, large = false } = {}) {
+    const scales = id === undefined ? null : G.traitScales({ id, species: species.id, pheno, traits });
+    const form = scales ? ` data-form="${scales.form}" data-leaf="${scales.leaf}"` : "";
+    return `<canvas class="plant-art" width="${large ? 680 : 340}" height="${large ? 610 : 305}" data-species="${species.id}" data-pheno="${pheno}" data-size="${percent(size)}" data-health="${percent(health)}" data-quality="${quality}"${form}${training ? ` data-training="${G.branchAngles({ training }).join(",")}"` : ""} aria-hidden="true"></canvas>`;
+  }
 
   let state;
   let lastSaved;
@@ -87,6 +90,7 @@
           state.marketPurchases ??= { window: -1, quantities: {} };
           state.orders ??= null;
           state.stationUpgrades ??= [[], [], []];
+          for (const plant of state.plants) plant.traits ??= G.traitsFor(plant);
           G.enforceDisplayLimit(state);
         }
       }
@@ -182,7 +186,7 @@
     const healthTip = sick ? "Needs attention" : plant.health < 72 ? "On the mend" : "Doing well";
     const waterTip = plant.water < needs.dry ? "Soil is dry" : plant.water > needs.wet ? "Soil is too wet" : "Moisture is good";
     return `<article class="care-card paper">
-      <div class="plant-scene phase-${G.phaseAt(now).name.toLowerCase()}">
+      <div class="plant-scene ${species.shape === "tree" ? "bonsai-scene " : ""}phase-${G.phaseAt(now).name.toLowerCase()}">
         <span class="plant-status ${sick ? "sick" : plant.health >= 72 ? "healthy" : "recovering"}"><i></i>${healthLabel}</span>
         ${canvas(species, { ...plant, large: true })}
         <span class="stage-label">${icon("sprout")} ${stage}${plant.quality ? ` · Shape ${plant.quality}/5` : ""}</span>
@@ -195,7 +199,7 @@
         <div class="metric-grid">
           ${metric("Health", "heart", `${percent(plant.health)}%`, healthTip, plant.health < 72 ? "warning" : "", plant.health)}
           ${metric("Water", "drop", `${percent(plant.water)}%`, waterTip, waterMood, plant.water)}
-          ${metric("Growth", "sprout", `${percent(plant.size)}%`, plant.size >= 42 ? "Breeding size" : "Breeding at 42%", "", plant.size)}
+          ${metric("Maturity", "sprout", `${percent(plant.size)}%`, plant.size >= 42 ? "Breeding maturity met" : "Breeding at 42%", "", plant.size)}
           ${metric("Light", "sun", LOCATIONS[plant.location], lightGood ? "Right for now" : `Move to ${LOCATIONS[needs.light].toLowerCase()}`, lightGood ? "" : "warning")}
           ${needs.humidity ? metric("Humidity", "mist", `${percent(plant.humidity)}%`, plant.humidity < needs.humidity ? "Needs misting" : "Humidity is good", plant.humidity < needs.humidity ? "warning" : "blue", plant.humidity) : ""}
           ${species.tier >= 1 ? metric("Nutrients", "fertilizer", `${percent(plant.nutrients)}%`, plant.nutrients < needs.food ? "Needs fertilizer" : "Nutrients are good", plant.nutrients < needs.food ? "warning" : "", plant.nutrients) : ""}
@@ -359,8 +363,8 @@
 
   function orderRequirement(order) {
     const species = SPECIES[order.species];
-    if (order.slot === "grow") return `Any Common plant at ${order.size}% growth or higher.`;
-    if (order.slot === "prune") return `${species.name} at ${order.size}% growth or higher and Shape ${order.quality} or better.`;
+    if (order.slot === "grow") return `Any Common plant at ${order.size}% maturity or higher.`;
+    if (order.slot === "prune") return `${species.name} at ${order.size}% maturity or higher and Shape ${order.quality} or better.`;
     return `${species.name} with the ${species.phenotypes[order.pheno]} phenotype.`;
   }
 
@@ -402,7 +406,7 @@
           const favorite = entry.parents.find(parent => parent.id === entry.favoredParentId);
           const canReuse = entry.parents.length === 2 && entry.parents.every(parent => state.plants.some(plant => plant.id === parent.id));
           return `<article class="paper journal-row">
-            <span class="shelf-preview">${canvas(child, { pheno: entry.pheno, size: 38 })}</span>
+            <span class="shelf-preview">${canvas(child, { ...entry, size: 38 })}</span>
             <div><h3>${child.name}</h3><p>${child.phenotypes[entry.pheno]} · ${dateFormat.format(entry.pottedAt)}</p>
               ${favorite ? `<span class="journal-favorite">${icon("leaf")} Favored ${SPECIES[favorite.species].phenotypes[favorite.pheno]} · #${favorite.id}</span>` : ""}
               <div class="journal-parents">${fromCutting ? "Cutting from " : ""}${pair || "Parents unavailable"}</div></div>
@@ -456,7 +460,7 @@
       </div>`;
     };
 
-    const crossNote = !valid ? "Choose two plants with at least 72% health and 42% growth."
+    const crossNote = !valid ? "Choose two plants with at least 72% health and 42% maturity."
       : target ? `<strong>72% chance of ${G.speciesUnlocked(state, target) ? target.name : `an undiscovered ${RARITIES[target.tier]} plant`}</strong><br>Otherwise, a species from either parent.`
       : a.species === b.species ? `<strong>${SPECIES[a.species].name}</strong><br>Seedlings can inherit or develop a different phenotype.`
       : "<strong>Either parent's species</strong><br>Pair different species of the same rarity to breed up a tier.";
@@ -765,7 +769,7 @@
     const problem = G.cuttingProblem(plant, now) || (G.freeSlots(state) <= 0 ? "Free a shelf space to reserve for the cutting" : "");
     const duration = G.rootingTime(plant) / G.MINUTE;
     openDialog(`Take a cutting from ${species.name}`, `<p>Grow a new ${species.phenotypes[plant.pheno]} plant. The cutting takes ${duration} minutes to root in the nursery and reserves one shelf space.</p>
-      <p class="species-needs">The parent gives up 8 growth points and can provide one cutting every 12 hours.</p>
+      <p class="species-needs">The parent gives up 8 maturity points and can provide one cutting every 12 hours.</p>
     ${problem ? `<p class="cutting-warning">${icon("info")} ${problem}</p>` : ""}
       <div class="dialog-actions">${button("Cancel", "close")}${button("Take cutting", "cut", {
         symbol: "prune", className: "primary", extra: `data-id="${plant.id}"`, disabled: Boolean(problem),
@@ -803,7 +807,7 @@
     const options = state.plants.filter(plant => G.orderMatches(order, plant)).map(plant => {
       const species = SPECIES[plant.species];
       const payout = G.salePrice(plant) + order.bonus;
-      return button(`<span>${species.name} #${plant.id}<small>${species.phenotypes[plant.pheno]} · ${percent(plant.size)}% growth</small></span>
+      return button(`<span>${species.name} #${plant.id}<small>${species.phenotypes[plant.pheno]} · ${percent(plant.size)}% mature</small></span>
         <span class="goal-reward">${coins(payout)}</span>`, "deliver-order", {
         className: "delivery-option", extra: `data-id="${order.id}" data-plant="${plant.id}" aria-label="Deliver ${species.name} number ${plant.id} for ${payout} coins"`,
       });

@@ -107,10 +107,11 @@ nav a[aria-current] { color: #264f37; background: #e4ecdd; box-shadow: inset 0 0
     linear-gradient(123deg, transparent 53%, #70826720 55%, transparent 57%);
 }
 .plant-scene::after {
-  content: ""; position: absolute; z-index: -1; inset: 77% 0 0;
+  content: ""; position: absolute; z-index: -1; inset: calc(50% + 94px) 0 0;
   background: linear-gradient(#4e624530, transparent 16%), linear-gradient(115deg, var(--scene-floor), #91a9874f);
   border-top: 1px solid #52674e3d;
 }
+.plant-scene.bonsai-scene::after { top: calc(50% + 77px); }
 .plant-art { display: block; width: 100%; height: auto; }
 .plant-scene .plant-art { width: min(118%, 396px); flex: 0 0 auto; margin-top: -16px; }
 .plant-status, .stage-label { position: absolute; z-index: 1; left: 15px; display: inline-flex; align-items: center; gap: 6px; border-radius: 30px; }
