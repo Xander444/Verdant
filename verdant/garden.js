@@ -9,7 +9,7 @@ window.Garden = (() => {
   const CROSS_COST = 5;
   const INHERITED_TRAIT_CHANCE = .62;
   const FAVOR_WEIGHT = .80;
-  const DISPLAY_LIMIT = 2;
+  const STARTING_DISPLAY_SPOTS = 2;
   const RARITIES = ["Common", "Uncommon", "Rare", "Legendary"];
   const PHASES = [
     { name: "Night", icon: "moon", until: 6, evaporation: .57, growth: .36 },
@@ -160,7 +160,7 @@ window.Garden = (() => {
 
   function fresh(now) {
     const state = {
-      version: 1, updatedAt: now, coins: 36, displayBank: 0, capacity: 4,
+      version: 1, updatedAt: now, coins: 36, displayBank: 0, displaySpots: STARTING_DISPLAY_SPOTS, capacity: 4,
       nextId: 1, inventory: { fertilizer: 2, tonic: 0 }, plants: [], seeds: [], discovered: [],
       history: { recovered: false, bought: false, harvested: false, rareCross: false },
       claimed: [], selected: 1, journal: [],
@@ -191,11 +191,28 @@ window.Garden = (() => {
     return state.plants.filter(plant => plant.onDisplay);
   }
 
+  function displayCapacity(state) {
+    return state.displaySpots ?? STARTING_DISPLAY_SPOTS;
+  }
+
+  function displaySpotCost(state) {
+    return 50 + (displayCapacity(state) - STARTING_DISPLAY_SPOTS) * 30;
+  }
+
+  function buyDisplaySpot(state) {
+    const cost = displaySpotCost(state);
+    if (state.coins < cost) return false;
+    state.coins -= cost;
+    state.displaySpots = displayCapacity(state) + 1;
+    return true;
+  }
+
   function enforceDisplayLimit(state) {
     const displayed = displayedPlants(state);
-    if (displayed.length <= DISPLAY_LIMIT) return;
+    const limit = displayCapacity(state);
+    if (displayed.length <= limit) return;
     displayed.sort((a, b) => displayRate(b) - displayRate(a));
-    for (const plant of displayed.slice(DISPLAY_LIMIT)) plant.onDisplay = false;
+    for (const plant of displayed.slice(limit)) plant.onDisplay = false;
   }
 
   function setDisplay(state, plant, replace) {
@@ -208,7 +225,7 @@ window.Garden = (() => {
     if (replace) {
       if (!state.plants.includes(replace) || !replace.onDisplay) return false;
       replace.onDisplay = false;
-    } else if (displayedPlants(state).length >= DISPLAY_LIMIT) {
+    } else if (displayedPlants(state).length >= displayCapacity(state)) {
       return false;
     }
     plant.onDisplay = true;
@@ -511,17 +528,6 @@ window.Garden = (() => {
     return favoredId === null ? .5 : favoredId === a.id ? FAVOR_WEIGHT : 1 - FAVOR_WEIGHT;
   }
 
-  function phenotypeOdds(a, b, requestedId) {
-    if (a.species !== b.species) return [];
-    const count = SPECIES[a.species].phenotypes.length;
-    const base = (1 - INHERITED_TRAIT_CHANCE) / count;
-    const odds = Array(count).fill(base);
-    const weight = firstParentWeight(a, favoredTraitParent(a, b, requestedId));
-    odds[a.pheno] += INHERITED_TRAIT_CHANCE * weight;
-    odds[b.pheno] += INHERITED_TRAIT_CHANCE * (1 - weight);
-    return odds;
-  }
-
   function breed(state, a, b, now, random = Math.random, requestedId = null) {
     if (!a || !b || a.id === b.id || freeSlots(state) < 1 || state.coins < CROSS_COST ||
         parentProblem(a, now) || parentProblem(b, now)) return null;
@@ -599,12 +605,13 @@ window.Garden = (() => {
   ];
 
   return {
-    MINUTE, HOUR, CROSS_COST, DISPLAY_LIMIT, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES,
+    MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES,
     CATALOG, SPECIES, SUPPLIES, GOALS, clamp, traitsFor, traitScales,
     phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
-    hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, enforceDisplayLimit, setDisplay,
+    hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, displayCapacity, displaySpotCost, buyDisplaySpot,
+    enforceDisplayLimit, setDisplay,
     pruningReadyAt, canPrune, pruningCutCount, prunePlant,
     speciesUnlocked, marketStock, nextRestock, buyPlant, rotateOrders, nextOrderDay, orderMatches,
-    toggleOrderPin, deliverOrder, parentProblem, crossPreview, phenotypeOdds, breed, cuttingProblem, rootingTime, takeCutting, potSeed,
+    toggleOrderPin, deliverOrder, parentProblem, crossPreview, breed, cuttingProblem, rootingTime, takeCutting, potSeed,
   };
 })();

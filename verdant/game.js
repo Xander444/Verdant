@@ -11,7 +11,6 @@
   const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
   const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
   const numberFormat = new Intl.NumberFormat();
-  const oddsFormat = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 1 });
   const paths = {
     sprout: '<path d="M12 22v-9m0 2C5 15 3 11 3 6c5 0 9 3 9 9Zm0 1c0-7 3-11 9-12 1 6-2 11-9 12Z"/>',
     home: '<path d="M3 10 12 3l9 7v11H3Zm6 11v-7h6v7M12 3v5"/>',
@@ -214,7 +213,7 @@
           ${state.inventory.tonic ? button(`Tonic <small>${state.inventory.tonic}</small>`, "tonic", { symbol: "heart", disabled: !allowed.tonic }) : ""}
         </div>
         <div class="care-trade">
-          ${button(plant.onDisplay ? "Remove from display" : G.displayedPlants(state).length >= G.DISPLAY_LIMIT ? "Swap onto display" : "Put on display", "display", { symbol: "display", className: "text-button" })}
+          ${button(plant.onDisplay ? "Remove from display" : G.displayedPlants(state).length >= G.displayCapacity(state) ? "Swap onto display" : "Put on display", "display", { symbol: "display", className: "text-button" })}
           ${button("Take cutting", "view-cutting", { symbol: "sprout", className: "text-button" })}
           ${button(`Sell for ${numberFormat.format(G.salePrice(plant))}`, "sell", { symbol: "tag", className: "text-button sell-link" })}
         </div>
@@ -245,9 +244,10 @@
     const available = Math.floor(state.displayBank + .0000001);
     return `<section class="paper income-card">
       <div class="income-heading"><span class="tile-icon">${icon("display")}</span><div><h3>Display earnings</h3>
-        <p>${displayed.length} / ${G.DISPLAY_LIMIT} display spots${displayed.length ? ` · ${rate.toFixed(2)} coins/hr` : ""}</p></div></div>
-      <div class="income-bottom"><span class="income-coins">${coins(available)}</span>
-        ${button("Collect", "collect", { className: "compact", disabled: available < 1 })}</div>
+        <p>${displayed.length} / ${G.displayCapacity(state)} display spots${displayed.length ? ` · ${rate.toFixed(2)} coins/hr` : ""}</p></div></div>
+      <div class="income-bottom"><span class="income-coins">${coins(available)}</span><div class="income-actions">
+        <a class="text-link" href="#market">Buy a spot</a>
+        ${button("Collect", "collect", { className: "compact", disabled: available < 1 })}</div></div>
     </section>`;
   }
 
@@ -322,6 +322,7 @@
 
   function market(now) {
     const spaceCost = G.shelfCost(state);
+    const displayCost = G.displaySpotCost(state);
     const open = G.freeSlots(state);
     const stock = CATALOG
       .filter(species => view.marketFilter === "all" || String(species.tier) === view.marketFilter)
@@ -336,6 +337,9 @@
         <article class="paper supply-card" id="shelf-upgrade"><span class="tile-icon">${icon("shelf")}</span>
           <div><h3>Extra shelf space</h3><p>Add two spaces for plants or seedlings.</p><small>${state.capacity} total spaces</small></div>
           ${button(coins(spaceCost), "expand", { extra: `aria-label="Buy two shelf spaces for ${spaceCost} coins"`, disabled: state.coins < spaceCost })}</article>
+        <article class="paper supply-card"><span class="tile-icon">${icon("display")}</span>
+          <div><h3>Display spot</h3><p>Earn coins from one more plant.</p><small>${G.displayCapacity(state)} total spots</small></div>
+          ${button(coins(displayCost), "buy-display", { extra: `aria-label="Buy one display spot for ${displayCost} coins"`, disabled: state.coins < displayCost })}</article>
         ${supplies}
       </div>
       <section aria-labelledby="stock-title">
@@ -419,21 +423,11 @@
 
   function traitPicker(a, b) {
     const species = SPECIES[a.species];
-    const distinct = a.pheno !== b.pheno;
-    const favored = distinct && [String(a.id), String(b.id)].includes(view.favoredParent)
-      ? Number(view.favoredParent) : null;
-    const odds = G.phenotypeOdds(a, b, favored);
-    const preferred = [a, b].find(parent => parent.id === favored);
-    const choices = distinct ? `<fieldset class="trait-choices"><legend>Favor a phenotype</legend>
+    const favored = [a, b].find(parent => String(parent.id) === view.favoredParent)?.id ?? null;
+    return `<fieldset class="trait-choices"><legend>Favor a phenotype</legend>
       <div>${[[null, "Balanced"], [a.id, species.phenotypes[a.pheno]], [b.id, species.phenotypes[b.pheno]]].map(([id, name]) =>
         `<label><input type="radio" id="trait-${id ?? "balanced"}" name="trait" data-filter="favoredParent" value="${id ?? ""}"${id === favored ? " checked" : ""}>
-          <span>${name}</span></label>`).join("")}</div></fieldset>` : "";
-    return `<section class="trait-panel" aria-label="Phenotype options">
-      ${choices}
-      <h3>Seedling odds</h3>
-      <ul class="trait-odds">${species.phenotypes.map((name, i) =>
-        `<li${preferred?.pheno === i ? ' class="favored"' : ""}><span>${name}</span><strong>${oddsFormat.format(odds[i])}</strong></li>`).join("")}</ul>
-    </section>`;
+          <span>${name}</span></label>`).join("")}</div></fieldset>`;
   }
 
   function breeding(now) {
@@ -441,7 +435,6 @@
     const a = findParent(view.parentA);
     const b = findParent(view.parentB);
     const valid = a && b && a !== b;
-    const target = valid ? G.crossPreview(a, b) : null;
     const problem = valid ? G.parentProblem(a, now) || G.parentProblem(b, now) : "";
     const parentSlot = (id, label, plant, other) => {
       const species = plant && SPECIES[plant.species];
@@ -460,17 +453,15 @@
       </div>`;
     };
 
-    const crossNote = !valid ? "Choose two plants with at least 72% health and 42% maturity."
-      : target ? `<strong>72% chance of ${G.speciesUnlocked(state, target) ? target.name : `an undiscovered ${RARITIES[target.tier]} plant`}</strong><br>Otherwise, a species from either parent.`
-      : a.species === b.species ? `<strong>${SPECIES[a.species].name}</strong><br>Seedlings can inherit or develop a different phenotype.`
-      : "<strong>Either parent's species</strong><br>Pair different species of the same rarity to breed up a tier.";
+    const crossNote = valid ? "Pot the seedling to discover what this pair produced."
+      : "Choose two plants with at least 72% health and 42% maturity.";
     const cause = problem || (!G.freeSlots(state) ? "Open a shelf space for the seedling." : state.coins < G.CROSS_COST ? "You need 5 coins to start a cross." : "");
     return `${pageIntro("Breeding Room", "Pair healthy plants to discover new species and phenotypes.", "dna")}
       <div class="breeding-grid">
         <section class="paper cross-card"><div class="section-heading"><h2>Choose parents</h2><span class="count-pill">${coins(G.CROSS_COST)} per cross</span></div>
           <div class="parents">${parentSlot("parentA", "First parent", a, b)}<span class="cross-plus">${icon("plus")}</span>${parentSlot("parentB", "Second parent", b, a)}</div>
           <div class="cross-note">${icon("info")}<p>${crossNote}</p></div>
-          ${valid && a.species === b.species ? traitPicker(a, b) : ""}
+          ${valid && a.species === b.species && a.pheno !== b.pheno ? traitPicker(a, b) : ""}
           ${cause ? `<p class="breeding-warning">${cause}</p>` : ""}
           ${button("Start cross", "breed", { symbol: "dna", className: "primary", disabled: !valid || Boolean(cause) })}
         </section>
@@ -478,11 +469,12 @@
           <div class="section-heading"><h2>Nursery tray</h2><span class="count-pill">${state.seeds.length} growing</span></div>
           ${state.seeds.length ? `<div class="seed-list">${state.seeds.map(seed => {
             const ready = seed.readyAt <= now;
-            const species = SPECIES[seed.species];
             const cutting = seed.source === "cutting";
-            const name = G.speciesUnlocked(state, species) ? species.name : `Undiscovered ${RARITIES[species.tier]} plant`;
+            const name = cutting ? SPECIES[seed.species].name : "";
+            const detail = ready ? name || "Pot to reveal the seedling." :
+              `${name ? name + " · " : ""}${countdown(seed.readyAt)} remaining`;
             return `<article class="seed-row"><span class="tile-icon">${icon("sprout")}</span><div><h3>${ready ? "Ready to pot" : cutting ? "Rooting cutting" : "Germinating"}</h3>
-              <p>${cutting || ready ? name : ""}${!ready ? `${cutting ? " · " : ""}${countdown(seed.readyAt)} remaining` : ""}</p></div>
+              <p>${detail}</p></div>
               ${button(cutting ? "Pot cutting" : "Pot seedling", "pot", { className: "compact", extra: `data-id="${seed.id}"`, disabled: !ready })}</article>`;
           }).join("")}</div>` : `<div class="nursery-empty"><span class="tile-icon">${icon("leaf")}</span><h3>The tray is empty</h3><p>Seeds and cuttings grow here. Each reserves one shelf space.</p></div>`}
         </section>
@@ -793,7 +785,7 @@
 
   function showDisplaySwap(incoming) {
     const species = SPECIES[incoming.species];
-    openDialog("Swap a display plant", `<p>Both display spots are filled. Choose which plant to take down to make room for ${species.name}.</p>
+    openDialog("Swap a display plant", `<p>All ${G.displayCapacity(state)} display spots are filled. Choose which plant to take down to make room for ${species.name}.</p>
       <div class="delivery-options">${G.displayedPlants(state).map(plant => {
         const displayed = SPECIES[plant.species];
         return button(`<span>${displayed.name} #${plant.id}<small>${displayed.phenotypes[plant.pheno]}</small></span>
@@ -968,6 +960,9 @@
         state.capacity += 2;
         return "Two shelf spaces added.";
       }
+      case "buy-display":
+        if (!G.buyDisplaySpot(state)) return "You need more coins for a display spot.";
+        return `Display spot added. You now have ${G.displayCapacity(state)} spots.`;
       case "buy-supply": {
         const item = SUPPLIES[id];
         if (!item || state.coins < item.cost) return;
