@@ -11,6 +11,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 ## Your first plants
 
 - Your starter is a sick Golden Pothos. Water its dry soil, move it to the recommended light, and prune it. Claim your goal reward when it reaches 72% health.
+- Use **View plant** or the arrows above the portrait to browse your collection. Shelf lists have their own page controls when there are more than four pots.
 - Move plants between the shade, window, and grow lamp. Drag a pot to another shelf, or select the pot and use **Move here**. Each shelf previews how quickly the selected plant's soil will dry there.
 - The **Grow lamp** has two spots. It gives plants that need window light during the day or grow-lamp light at night 60% faster growth when their care needs are met. Soil dries 65% faster than at an open window. If a previous save has more than two plants under the lamp, the extras move to the Window.
 - Use **Upgrade shelf** to install a humidity tray on any shelf, a shade curtain at the window, or a lamp timer. The timer dims the grow lamp during the day so afternoon shade-lovers can use it. While dimmed, growth is 35% faster with good care and soil dries 30% faster than at an open window.
@@ -22,6 +23,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - Open **Family tree** in the Breeding Journal or Plant Care to compare portraits of relatives at the same maturity. Relatives stay in the journal after you sell them. Use a saved pair again while both parents remain on your shelves and meet the breeding requirements. Selecting those same plants shows their last potted result.
 - Give a plant a **Nickname** and use the star to mark it as a favorite. Choose **Favorites** above the shelves to see only starred plants.
 - Open **Repot** to try different pots and compare their appearance. Preview the soil mix in the same dialog. Moisture-retaining soil dries 25% slower and fast-draining soil dries 30% faster than the standard mix.
+- Choose **Ready to breed only** to limit both parent dropdowns to plants with enough health and maturity that have finished recovering.
 - When two plants of the same species have different phenotypes, you can favor one for the cross. The breeding journal remembers your choice.
 - Offspring inherit differences in appearance from their parents, and these differences affect sale value. Cuttings retain the parent's inherited appearance.
 - Plants with at least 83% maturity and 75% health can provide a cutting of the same phenotype. A cutting uses one nursery space and costs its parent 8 maturity points. It roots in 20 to 75 minutes, depending on rarity.

@@ -36,6 +36,8 @@
     display: '<path d="M5 14h14v4H5Zm-2 7h18m-3 0v-3M6 21v-3M12 3v7M8 7h8"/>',
     plus: '<path d="M5 12h14m-7-7v14"/>',
     arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
+    previous: '<path d="m14 5-7 7 7 7"/>',
+    next: '<path d="m10 5 7 7-7 7"/>',
     chevron: '<path d="m8 10 4 4 4-4"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
@@ -52,6 +54,7 @@
   const reward = n => `${icon("coin")} <span>+${numberFormat.format(n)}</span>`;
   const percent = value => Math.floor(value + .000001);
   const countSpecies = () => new Set(state.discovered.map(key => key.split(":")[0])).size;
+  const SHELF_PAGE_SIZE = 4;
   const stationIcons = ["leaf", "sun", "lamp"];
   const stationNotes = ["Soft light, slower drying", "Light follows the day"];
   const totalPhenotypes = CATALOG.reduce((sum, species) => sum + species.phenotypes.length, 0);
@@ -83,7 +86,7 @@
   let pouring;
   let pruning;
   let training;
-  let view = { marketFilter: "all", guideFilter: "all", parentA: "", parentB: "", favoredParent: "", favoritesOnly: false };
+  let view = { marketFilter: "all", guideFilter: "all", parentA: "", parentB: "", favoredParent: "", favoritesOnly: false, shelfPages: [0, 0, 0], breedableOnly: false };
 
   function syncSave() {
     try {
@@ -194,7 +197,6 @@
         <div class="hero-content">
           <span class="hero-time">${icon(phase.icon)} ${phase.name === "Night" ? "The greenhouse at night" : `${phase.name} light`}</span>
           <h1>The Greenhouse</h1>
-          <p>Care for your plants, build your collection, and breed rare varieties.</p>
         </div>
       </section>`;
   }
@@ -232,16 +234,17 @@
     const stage = plant.size >= 83 ? "Mature" : plant.size >= 42 ? "Established" : plant.size >= 23 ? "Young plant" : "Seedling";
     const healthLabel = sick ? "Needs care" : plant.health < 72 ? "Recovering" : "Healthy";
     const healthTip = sick ? "Needs attention" : plant.health < 72 ? "On the mend" : "Doing well";
+    const humidityLow = plant.humidity < needs.humidity;
     const waterTip = plant.water < needs.dry ? "Soil is dry" : plant.water > needs.wet ? "Soil is too wet" : "Moisture is good";
-    return `<article class="care-card paper">
+    return `<article class="care-card">
       <div class="plant-scene ${shallow ? "bonsai-scene " : ""}phase-${G.phaseAt(now).name.toLowerCase()}">
         <span class="plant-status ${sick ? "sick" : plant.health >= 72 ? "healthy" : "recovering"}"><i></i>${healthLabel}</span>
         ${canvas(species, { ...plant, large: true })}
         <span class="stage-label">${icon("sprout")} ${stage}${plant.quality ? ` · Shape ${plant.quality}/5` : ""}</span>
       </div>
-      <div class="care-body">
+      <div class="care-body paper">
         <div class="plant-heading">
-          <div>${tierBadge(species)}<h3>${plantName(plant)}</h3><p>${plantDetail(plant)}</p></div>
+          <div>${tierBadge(species)}<h3 title="${plantName(plant)}">${plantName(plant)}</h3><p title="${plantDetail(plant)}">${plantDetail(plant)}</p></div>
           <div class="plant-heading-actions">
             ${button(icon("star"), "favorite", { className: "icon-button favorite-button",
               extra: `aria-pressed="${Boolean(plant.favorite)}" aria-label="Favorite plant" title="Favorite plant"` })}
@@ -253,22 +256,22 @@
           ${metric("Water", "drop", `${percent(plant.water)}%`, waterTip, waterMood, plant.water)}
           ${metric("Maturity", "sprout", `${percent(plant.size)}%`, plant.size >= 42 ? "Breeding maturity met" : "Breeding at 42%", "", plant.size)}
           ${metric("Light", "sun", LOCATIONS[plant.location], lightTip, lightGood ? "" : "warning")}
-          ${needs.humidity ? metric("Humidity", "mist", `${percent(plant.humidity)}%`, plant.humidity < needs.humidity ? "Needs misting" : "Humidity is good", plant.humidity < needs.humidity ? "warning" : "blue", plant.humidity) : ""}
-          ${species.tier >= 1 ? metric("Nutrients", "fertilizer", `${percent(plant.nutrients)}%`, plant.nutrients < needs.food ? "Needs fertilizer" : "Nutrients are good", plant.nutrients < needs.food ? "warning" : "", plant.nutrients) : ""}
+          ${metric("Humidity", "mist", `${percent(plant.humidity)}%`, !needs.humidity ? "No minimum" : humidityLow ? "Needs misting" : "Humidity is good", humidityLow ? "warning" : "blue", plant.humidity)}
+          ${metric("Nutrients", "fertilizer", `${percent(plant.nutrients)}%`, plant.nutrients < needs.food ? "Needs fertilizer" : "Nutrients are good", plant.nutrients < needs.food ? "warning" : "", plant.nutrients)}
         </div>
         <div class="care-actions">
-          ${button("Watering can", "watering-can", { symbol: "can", className: "primary" })}
+          ${button("Water", "watering-can", { symbol: "can", className: "primary", extra: 'aria-label="Watering can"' })}
           ${button("Move", "move", { symbol: "sun", extra: 'title="Choose where this plant gets its light"' })}
           ${button("Prune", "prune", { symbol: "prune", disabled: !allowed.prune, extra: `title="${allowed.timers.prune > now ? `Ready in ${remaining(allowed.timers.prune, now)}` : "Trim damaged leaves and improve the plant's shape"}"` })}
-          ${species.shape === "tree" ? button("Train branches", "train", { symbol: "branch" }) : ""}
           ${button(`Feed <small>${state.inventory.fertilizer}</small>`, "feed", { symbol: "fertilizer", disabled: !allowed.feed, extra: `title="${allowed.timers.feed > now ? `Ready in ${remaining(allowed.timers.feed, now)}` : "Use one dose of fertilizer"}"` })}
-          ${needs.humidity ? button("Mist", "mist", { symbol: "mist", disabled: !allowed.mist }) : ""}
-          ${state.inventory.tonic ? button(`Tonic <small>${state.inventory.tonic}</small>`, "tonic", { symbol: "heart", disabled: !allowed.tonic }) : ""}
+          ${button("Mist", "mist", { symbol: "mist", disabled: !needs.humidity || !allowed.mist })}
+          ${button(`Tonic <small>${state.inventory.tonic}</small>`, "tonic", { symbol: "heart", disabled: !allowed.tonic })}
         </div>
         <div class="plant-tools">
           ${button("Nickname", "nickname", { symbol: "tag", className: "compact" })}
           ${button("Repot", "repot", { symbol: "sprout", className: "compact" })}
           ${button("Family tree", "family", { symbol: "branch", className: "compact", extra: `data-id="${plant.id}"` })}
+          ${species.shape === "tree" ? button("Train branches", "train", { symbol: "branch", className: "compact" }) : ""}
         </div>
         <div class="care-trade">
           ${button(plant.onDisplay ? "Remove from display" : G.displayedPlants(state).length >= G.displayCapacity(state) ? "Swap onto display" : "Put on display", "display", { symbol: "display", className: "text-button" })}
@@ -313,10 +316,10 @@
     const slots = G.freeSlots(state);
     const plantTile = item => {
       const species = SPECIES[item.species];
-      return `<button class="shelf-plant ${item === plant ? "selected" : ""}" type="button" draggable="true" data-action="select" data-id="${item.id}" aria-pressed="${item === plant}">
+      return `<button class="shelf-plant ${item === plant ? "selected" : ""}" type="button" draggable="true" data-action="select" data-shelf-tile data-id="${item.id}" aria-pressed="${item === plant}">
         <span class="shelf-preview">${canvas(species, item)}${item.onDisplay ? `<span class="shelf-display" title="On display">${icon("display")}</span>` : ""}
           ${item.favorite ? `<span class="shelf-favorite" title="Favorite">${icon("star")}</span>` : ""}</span>
-        <span><strong>${plantName(item)}</strong><small>${plantDetail(item)}</small></span>
+        <span class="shelf-plant-name"><strong title="${plantName(item)}">${plantName(item)}</strong><small title="${plantDetail(item)}">${plantDetail(item)}</small></span>
       </button>`;
     };
     const lampCount = G.lampPlantCount(state);
@@ -324,6 +327,12 @@
     const stations = LOCATIONS.map((name, spot) => {
       const residents = state.plants.filter(item => item.location === spot && (!view.favoritesOnly || item.favorite))
         .sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)));
+      const pages = Math.max(1, Math.ceil(residents.length / SHELF_PAGE_SIZE));
+      const page = Math.min(view.shelfPages[spot], pages - 1);
+      const tiles = residents.slice(page * SHELF_PAGE_SIZE, (page + 1) * SHELF_PAGE_SIZE);
+      const pageButton = (direction, target) => button("", "shelf-page", {
+        symbol: direction, className: "icon-button", extra: `id="shelf-${spot}-${direction}" data-station-index="${spot}" data-index="${target}" aria-label="${direction === "previous" ? "Previous" : "Next"} ${name.toLowerCase()} shelf page"`,
+      });
       const current = plant?.location === spot;
       const full = !G.stationHasRoom(state, spot);
       const recommended = plant && (!full || current) && G.lightWorks(plant, now, spot, state);
@@ -338,8 +347,12 @@
             ${recommended ? '<span class="count-pill station-recommended">Good light now</span>' : ""}
           </div>
         </div>
-        <div class="station-pots">${residents.length ? residents.map(plantTile).join("") :
+        <div class="station-pots">${tiles.length ? tiles.map(plantTile).join("") +
+          (pages > 1 ? '<span class="shelf-page-placeholder" aria-hidden="true"></span>'.repeat(SHELF_PAGE_SIZE - tiles.length) : "") :
           `<div class="station-empty">${icon("sprout")} ${view.favoritesOnly ? "No favorites here" : "Empty spot"}</div>`}</div>
+        ${pages > 1 ? `<div class="shelf-pagination">
+          ${pageButton("previous", (page - 1 + pages) % pages)}<span>${page + 1} / ${pages}</span>${pageButton("next", (page + 1) % pages)}
+        </div>` : ""}
         ${plant ? `<div class="station-footer"><small title="Current soil drying rate">${icon("drop")} ${dryingLabel(plant, now, spot)}</small>
           ${button(current ? "Here now" : full ? "Lamp is full" : "Move here", "station-place", { className: "compact", disabled: current || full,
             extra: `data-id="${spot}" data-plant="${plant.id}" aria-label="${current ? `${plantName(plant)} is here` :
@@ -364,13 +377,32 @@
     </section>`;
   }
 
+  function plantPicker(plant) {
+    const total = state.plants.length;
+    const index = state.plants.indexOf(plant);
+    const step = direction => button("", "step-plant", {
+      className: "icon-button", symbol: direction, disabled: total < 2,
+      extra: `data-id="${direction === "previous" ? -1 : 1}" aria-label="${direction === "previous" ? "Previous" : "Next"} plant"`,
+    });
+    return `<div class="plant-picker paper">
+      <label for="care-plant">View plant</label>
+      <select id="care-plant" data-plant-picker>
+        ${state.plants.map(item =>
+          `<option value="${item.id}"${item === plant ? " selected" : ""}>${plantName(item)} #${item.id}${item.favorite ? " · Favorite" : ""}</option>`).join("")}
+      </select>
+      <div class="plant-picker-step">${step("previous")}
+        <span aria-label="Plant ${index + 1} of ${total}">${numberFormat.format(index + 1)} / ${numberFormat.format(total)}</span>
+        ${step("next")}</div>
+    </div>`;
+  }
+
   function greenhouse(now) {
     const plant = activePlant();
     return `${hero(now)}
       <div class="greenhouse-grid">
         <section aria-labelledby="care-title">
           <div class="section-heading"><h2 id="care-title">Plant care</h2></div>
-          ${plant ? careView(plant, now) : `<div class="paper empty-state"><span class="tile-icon">${icon("sprout")}</span><h3>Your shelves are ready</h3>
+          ${plant ? plantPicker(plant) + careView(plant, now) : `<div class="paper empty-state"><span class="tile-icon">${icon("sprout")}</span><h3>Your shelves are ready</h3>
             <p>${canRescue() ? "Adopt a free rescue pothos." : G.freeSlots(state) ? "Find a new plant at the market." : "Your shelf spaces are reserved for plants in the nursery."}</p>
             ${canRescue() ? button("Adopt rescue plant", "rescue", { symbol: "sprout", className: "primary" }) :
               G.freeSlots(state) ? '<a class="button primary" href="#market">Open market</a>' : '<a class="button primary" href="#breeding">Open breeding room</a>'}</div>`}
@@ -517,7 +549,8 @@
   }
 
   function breeding(now) {
-    const findParent = id => state.plants.find(plant => String(plant.id) === id);
+    const candidates = view.breedableOnly ? state.plants.filter(plant => !G.parentProblem(plant, now)) : state.plants;
+    const findParent = id => candidates.find(plant => String(plant.id) === id);
     const a = findParent(view.parentA);
     const b = findParent(view.parentB);
     const valid = a && b && a !== b;
@@ -526,9 +559,9 @@
       const species = plant && SPECIES[plant.species];
       return `<div class="parent-slot">
         <label for="${id}">${label}</label>
-        <select id="${id}" data-filter="${id}">
-          <option value="">Choose a plant</option>
-          ${state.plants.map(item => {
+        <select id="${id}" data-filter="${id}"${candidates.length ? "" : " disabled"}>
+          <option value="">${view.breedableOnly && !candidates.length ? "No breeding-ready plants" : "Choose a plant"}</option>
+          ${candidates.map(item => {
             const blocked = G.parentProblem(item, now);
             return `<option value="${item.id}"${item === plant ? " selected" : ""}${item === other ? " disabled" : ""}>${plantName(item)} #${item.id}${blocked ? ` · ${blocked}` : ""}</option>`;
           }).join("")}
@@ -546,6 +579,7 @@
     return `${pageIntro("Breeding Room", "Pair healthy plants to discover new species and phenotypes.", "dna")}
       <div class="breeding-grid">
         <section class="paper cross-card"><div class="section-heading"><h2>Choose parents</h2><span class="count-pill">${coins(G.CROSS_COST)} per cross</span></div>
+          <label class="breedable-filter"><input type="checkbox" id="breedable-only" data-filter="breedableOnly"${view.breedableOnly ? " checked" : ""}> Ready to breed only</label>
           <div class="parents">${parentSlot("parentA", "First parent", a, b)}<span class="cross-plus">${icon("plus")}</span>${parentSlot("parentB", "Second parent", b, a)}</div>
           ${pastSpecies ? `<div class="cross-note cross-history">
             <span class="shelf-preview">${canvas(pastSpecies, { ...previous, size: 63 })}</span>
@@ -1035,7 +1069,18 @@
         if (species && G.speciesUnlocked(state, species)) showEntry(species);
         return;
       case "select":
-        if (state.plants.some(item => item.id === Number(id))) state.selected = Number(id);
+        if (!state.plants.some(item => item.id === Number(id))) return;
+        state.selected = Number(id);
+        if (data.shelfTile !== undefined) requestAnimationFrame(() => document.querySelector("#care-plant")?.focus());
+        return;
+      case "step-plant": {
+        const total = state.plants.length;
+        const index = state.plants.indexOf(plant);
+        if (total > 1) state.selected = state.plants[(index + Number(id) + total) % total].id;
+        return;
+      }
+      case "shelf-page":
+        view.shelfPages[Number(data.stationIndex)] = Number(data.index);
         return;
       case "favorite":
         if (!plant) return;
@@ -1247,6 +1292,8 @@
         if (entry?.parents.length !== 2 || !entry.parents.every(parent => state.plants.some(item => item.id === parent.id))) {
           return "This pair is no longer on your shelves.";
         }
+        if (view.breedableOnly && entry.parents.some(parent =>
+          G.parentProblem(state.plants.find(item => item.id === parent.id), now))) view.breedableOnly = false;
         [view.parentA, view.parentB] = entry.parents.map(parent => String(parent.id));
         view.favoredParent = entry.favoredParentId ? String(entry.favoredParentId) : "";
         requestAnimationFrame(() => {
@@ -1397,9 +1444,13 @@
   app.addEventListener("dragend", clearDrag);
 
   app.addEventListener("change", event => {
+    if (event.target.matches("[data-plant-picker]")) {
+      runAction("select", { id: event.target.value });
+      return;
+    }
     const { filter } = event.target.dataset;
     if (!filter || !Object.hasOwn(view, filter)) return;
-    view[filter] = event.target.value;
+    view[filter] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
     if (filter === "parentA" || filter === "parentB") view.favoredParent = "";
     render();
   });
