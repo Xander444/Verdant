@@ -538,6 +538,8 @@
       </div>`;
     };
 
+    const previous = valid ? G.lastCrossResult(state, a.id, b.id) : null;
+    const pastSpecies = previous && SPECIES[previous.species];
     const crossNote = valid ? "Pot the seedling to discover what this pair produced."
       : "Choose two plants with at least 72% health and 42% maturity.";
     const cause = problem || (!G.freeSlots(state) ? "Open a shelf space for the seedling." : state.coins < G.CROSS_COST ? "You need 5 coins to start a cross." : "");
@@ -545,7 +547,10 @@
       <div class="breeding-grid">
         <section class="paper cross-card"><div class="section-heading"><h2>Choose parents</h2><span class="count-pill">${coins(G.CROSS_COST)} per cross</span></div>
           <div class="parents">${parentSlot("parentA", "First parent", a, b)}<span class="cross-plus">${icon("plus")}</span>${parentSlot("parentB", "Second parent", b, a)}</div>
-          <div class="cross-note">${icon("info")}<p>${crossNote}</p></div>
+          ${pastSpecies ? `<div class="cross-note cross-history">
+            <span class="shelf-preview">${canvas(pastSpecies, { ...previous, size: 63 })}</span>
+            <p><strong>Last potted result</strong><span>${pastSpecies.name} · ${pastSpecies.phenotypes[previous.pheno]}</span></p>
+          </div>` : `<div class="cross-note">${icon("info")}<p>${crossNote}</p></div>`}
           ${valid && a.species === b.species && a.pheno !== b.pheno ? traitPicker(a, b) : ""}
           ${cause ? `<p class="breeding-warning">${cause}</p>` : ""}
           ${button("Start cross", "breed", { symbol: "dna", className: "primary", disabled: !valid || Boolean(cause) })}

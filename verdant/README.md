@@ -19,7 +19,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - On a woody plant, open **Train branches** to select and bend a branch. Save the shape to keep the new silhouette.
 - Buy a second Common plant. Feed both with your starting fertilizer. You need an open shelf space, five coins, and two plants with at least 72% health and 42% maturity to start a cross.
 - Experiment with different pairs, then pot the seedling to reveal the result. A new species or phenotype is added to the Field Guide when you pot it.
-- Open **Family tree** in the Breeding Journal or Plant Care to compare portraits of relatives at the same maturity. Relatives stay in the journal after you sell them. Use a saved pair again while both parents remain on your shelves and meet the breeding requirements.
+- Open **Family tree** in the Breeding Journal or Plant Care to compare portraits of relatives at the same maturity. Relatives stay in the journal after you sell them. Use a saved pair again while both parents remain on your shelves and meet the breeding requirements. Selecting those same plants shows their last potted result.
 - Give a plant a **Nickname** and use the star to mark it as a favorite. Choose **Favorites** above the shelves to see only starred plants.
 - Open **Repot** to try different pots and compare their appearance. Preview the soil mix in the same dialog. Moisture-retaining soil dries 25% slower and fast-draining soil dries 30% faster than the standard mix.
 - When two plants of the same species have different phenotypes, you can favor one for the cross. The breeding journal remembers your choice.

@@ -673,6 +673,16 @@ window.Garden = (() => {
     return { id, species, pheno, nickname, pot, soil, traits: { ...traitsFor(plant) } };
   }
 
+  function crossHasParents(entry, firstId, secondId) {
+    if (entry.source === "cutting" || entry.parents?.length !== 2) return false;
+    const [first, second] = entry.parents;
+    return (first.id === firstId && second.id === secondId) || (first.id === secondId && second.id === firstId);
+  }
+
+  function lastCrossResult(state, firstId, secondId) {
+    return state.journal.find(entry => crossHasParents(entry, firstId, secondId));
+  }
+
   function familyFor(state, id) {
     const owned = new Map(state.plants.map(plant => [plant.id, plant]));
     const recorded = new Map(state.journal.map(plant => [plant.id, plant]));
@@ -684,9 +694,8 @@ window.Garden = (() => {
     if (!specimen) return null;
 
     const parents = (entry?.parents ?? []).map(latest);
-    const parentIds = new Set(parents.map(parent => parent.id));
-    const siblings = parentIds.size === 2 ? state.journal.filter(item =>
-      item.id !== id && item.parents?.length === 2 && item.parents.every(parent => parentIds.has(parent.id))
+    const siblings = parents.length === 2 ? state.journal.filter(item =>
+      item.id !== id && crossHasParents(item, parents[0].id, parents[1].id)
     ) : [];
     return {
       specimen, parents, siblings: siblings.map(latest),
@@ -774,7 +783,7 @@ window.Garden = (() => {
   return {
     MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES, GROW_LAMP, GROW_LAMP_SLOTS,
     CATALOG, SPECIES, SUPPLIES, GOALS, POT_STYLES, SOIL_MIXES, clamp, traitsFor, traitScales,
-    potStyle, soilMix, repotCost, repotPlant, renamePlant, familyFor,
+    potStyle, soilMix, repotCost, repotPlant, renamePlant, familyFor, lastCrossResult,
     phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, upgradeSavedShelves, shelfCost, buyShelfUpgrade, freeSlots,
     hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, displayCapacity, displaySpotCost, buyDisplaySpot,
     enforceDisplayLimit, setDisplay, lampPlantCount, stationHasRoom, enforceLampLimit, growLampEffects,
