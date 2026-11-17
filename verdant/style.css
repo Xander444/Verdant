@@ -123,12 +123,13 @@ nav a[aria-current] { color: #203d30; background: #dce9cb; box-shadow: inset 0 0
 .plant-picker-step span { text-align: center; min-width: 57px; }
 .plant-picker-step .button { width: 40px; height: 40px; }
 .care-card { display: grid; grid-template-columns: minmax(0, .91fr) minmax(0, 1.09fr); gap: 10px; align-items: start; }
+.plant-portrait { min-width: 0; overflow: hidden; container-type: inline-size; }
 .plant-scene {
   --scene: #e2ebda; --scene-light: #fff3cf; --scene-edge: #c8dacb; --scene-floor: #aabea8;
   --window-line: #5f806c26; --window-glow: #fffdf377;
+  --scene-height: clamp(270px, calc(100svh - 395px), 464px);
   position: relative; display: flex; align-items: center; justify-content: center;
-  height: clamp(290px, calc(100svh - 336px), 484px); overflow: hidden; isolation: isolate;
-  border: 1px solid #d9dfd1; border-radius: 17px; box-shadow: var(--card-shadow);
+  height: var(--scene-height); overflow: hidden; isolation: isolate;
   background: radial-gradient(ellipse 91% 83% at 37% 4%, var(--scene-light), transparent 79%),
     linear-gradient(147deg, var(--scene) 15%, var(--scene-edge));
 }
@@ -150,8 +151,25 @@ nav a[aria-current] { color: #203d30; background: #dce9cb; box-shadow: inset 0 0
   border-top: 2px solid #66806b66;
 }
 .plant-scene.bonsai-scene::after { top: calc(50% + 77px); }
+.portrait-display {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  padding: 8px 10px; background: #f5f8ed; border-top: 1px solid var(--line);
+}
+.portrait-display.is-displayed { background: #e6f1df; }
+.portrait-display .tile-icon { width: 31px; height: 31px; color: #3f664a; background: #e1ecda; }
+.portrait-display .tile-icon svg { width: 17px; height: 17px; }
+.display-rate { min-width: 0; line-height: 1.2; }
+.display-rate small { display: block; color: var(--muted); font-size: .72rem; overflow-wrap: anywhere; }
+.display-rate strong { display: block; color: #244f3c; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.portrait-display > .button.compact { min-height: 40px; max-width: 125px; padding: 4px 8px; }
+.swap-preview { border: 1px solid var(--line); border-radius: 9px; margin-bottom: 10px; }
+@container (max-width: 245px) {
+  .portrait-display > .tile-icon { display: none; }
+  .portrait-display { grid-template-columns: minmax(0, 1fr) auto; }
+  .portrait-display > .button.compact { max-width: 97px; }
+}
 .plant-art { display: block; width: 100%; height: auto; }
-.plant-scene .plant-art { transform-origin: 50% 78%; width: min(100%, 396px); flex: 0 0 auto; margin-top: -16px; }
+.plant-scene .plant-art { transform-origin: 50% 78%; width: min(100%, 396px, calc(var(--scene-height) * 1.12)); flex: 0 0 auto; margin-top: -16px; }
 .plant-status, .stage-label { position: absolute; z-index: 1; left: 15px; display: inline-flex; align-items: center; gap: 6px; border-radius: 30px; }
 .plant-status { top: 15px; background: #fcfaf0; color: #345944; font-size: .73rem; font-weight: 750; border: 1px solid #ecedda; padding: 5px 10px; box-shadow: 0 3px 9px #3a52231b; }
 .plant-status.sick { color: #774a19; background: #f9e9cb; border-color: #ebd7b1; }
@@ -211,7 +229,7 @@ nav a[aria-current] { color: #203d30; background: #dce9cb; box-shadow: inset 0 0
 .plant-tools svg { width: 12px; height: 12px; }
 .favorite-button[aria-pressed="true"] { color: #795316; background: #fff2d3; border-color: #dbc48e; }
 .favorite-button[aria-pressed="true"] svg, .shelf-favorite svg { fill: #dfb65b; }
-.care-trade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 34px; gap: 5px; margin-top: 7px; border-top: 1px solid #ebede3; }
+.care-trade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 34px; gap: 5px; margin-top: 7px; border-top: 1px solid #ebede3; }
 .care-trade .button { min-width: 0; padding-block: 2px; }
 .text-button { color: #41664a; background: transparent; border-color: transparent; padding: 5px 0; min-height: 33px; font-size: .75rem; }
 .text-button:hover:not(:disabled) { background: transparent; border-color: transparent; text-decoration: underline; }
@@ -648,7 +666,7 @@ dialog::backdrop { background: #0a241c99; backdrop-filter: blur(4px); }
   .order-grid { grid-template-columns: 1fr; gap: 8px; }
   .station-grid { grid-template-columns: 1fr; gap: 8px; }
   .care-card { grid-template-columns: 1fr; gap: 8px; }
-  .plant-scene { height: 242px; }
+  .plant-scene { --scene-height: 242px; }
   .plant-scene .plant-art { width: min(100%, 276px); margin-top: -17px; }
 }
 @media (max-width: 550px) {

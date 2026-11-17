@@ -182,6 +182,7 @@
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   }
 
+  const hourlyCoins = rate => `${rate.toFixed(2)} coins/hr`;
   const dryingLabel = (plant, now, spot) => `Loses ${G.dryingRate(plant, now, spot, state).toFixed(1)}% moisture/hr`;
 
   const countdown = until => `<span data-countdown="${until}"></span>`;
@@ -236,12 +237,24 @@
     const healthLabel = sick ? "Needs care" : plant.health < 72 ? "Recovering" : "Healthy";
     const healthTip = sick ? "Needs attention" : plant.health < 72 ? "On the mend" : "Doing well";
     const humidityLow = plant.humidity < needs.humidity;
+    const displayAction = plant.onDisplay ? "Remove from display" :
+      G.displayedPlants(state).length >= G.displayCapacity(state) ? "Swap onto display" : "Put on display";
     const waterTip = plant.water < needs.dry ? "Soil is dry" : plant.water > needs.wet ? "Soil is too wet" : "Moisture is good";
     return `<article class="care-card">
-      <div class="plant-scene ${shallow ? "bonsai-scene " : ""}phase-${G.phaseAt(now).name.toLowerCase()}">
-        <span class="plant-status ${sick ? "sick" : plant.health >= 72 ? "healthy" : "recovering"}"><i></i>${healthLabel}</span>
-        ${canvas(species, { ...plant, large: true })}
-        <span class="stage-label">${icon("sprout")} ${stage}${plant.quality ? ` · Shape ${plant.quality}/5` : ""}</span>
+      <div class="plant-portrait paper">
+        <div class="plant-scene ${shallow ? "bonsai-scene " : ""}phase-${G.phaseAt(now).name.toLowerCase()}">
+          <span class="plant-status ${sick ? "sick" : plant.health >= 72 ? "healthy" : "recovering"}"><i></i>${healthLabel}</span>
+          ${canvas(species, { ...plant, large: true })}
+          <span class="stage-label">${icon("sprout")} ${stage}${plant.quality ? ` · Shape ${plant.quality}/5` : ""}</span>
+        </div>
+        <div class="portrait-display${plant.onDisplay ? " is-displayed" : ""}">
+          <span class="tile-icon">${icon("display")}</span>
+          <div id="plant-display-rate" class="display-rate">
+            <small>${plant.onDisplay ? "On display" : "If displayed"}</small>
+            <strong>${hourlyCoins(G.displayRate(plant))}</strong>
+          </div>
+          ${button(displayAction, "display", { className: "compact", extra: 'aria-describedby="plant-display-rate"' })}
+        </div>
       </div>
       <div class="care-body paper">
         <div class="plant-heading">
@@ -275,7 +288,6 @@
           ${species.shape === "tree" ? button("Train branches", "train", { symbol: "branch", className: "compact" }) : ""}
         </div>
         <div class="care-trade">
-          ${button(plant.onDisplay ? "Remove from display" : G.displayedPlants(state).length >= G.displayCapacity(state) ? "Swap onto display" : "Put on display", "display", { symbol: "display", className: "text-button" })}
           ${button("Take cutting", "view-cutting", { symbol: "sprout", className: "text-button" })}
           ${button(`Sell for ${numberFormat.format(G.salePrice(plant))}`, "sell", { symbol: "tag", className: "text-button sell-link" })}
         </div>
@@ -306,7 +318,7 @@
     const available = Math.floor(state.displayBank + .0000001);
     return `<section class="paper income-card">
       <div class="income-heading"><span class="tile-icon">${icon("display")}</span><div><h3>Display earnings</h3>
-        <p>${displayed.length} / ${G.displayCapacity(state)} display spots${displayed.length ? ` · ${rate.toFixed(2)} coins/hr` : ""}</p></div></div>
+        <p>${displayed.length} / ${G.displayCapacity(state)} display spots${displayed.length ? ` · ${hourlyCoins(rate)}` : ""}</p></div></div>
       <div class="income-bottom"><span class="income-coins">${coins(available)}</span><div class="income-actions">
         <a class="text-link" href="#market">Buy a spot</a>
         ${button("Collect", "collect", { className: "compact", disabled: available < 1 })}</div></div>
@@ -736,7 +748,7 @@
         ["Maturity", `${percent(plant.size)}%`],
         ["Shape", `${plant.quality}/5`],
         ["Sale value", `${numberFormat.format(G.salePrice(plant))} coins`],
-        ["Display rate", `${G.displayRate(plant).toFixed(2)} coins/hr`],
+        ["Display rate", hourlyCoins(G.displayRate(plant))],
       ];
       return `<article class="compare-column">
         <label for="${id}">${label}</label>
@@ -1059,11 +1071,15 @@
   }
 
   function showDisplaySwap(incoming) {
-    openDialog("Swap a display plant", `<p>All ${G.displayCapacity(state)} display spots are filled. Choose which plant to take down to make room for ${plantName(incoming)}.</p>
+    openDialog("Swap a display plant", `<div class="portrait-display swap-preview">
+        <span class="tile-icon">${icon("display")}</span><div class="display-rate"><small>${plantName(incoming)} if displayed</small>
+          <strong>${hourlyCoins(G.displayRate(incoming))}</strong></div>
+      </div>
+      <p>Choose which plant to replace.</p>
       <div class="delivery-options">${G.displayedPlants(state).map(plant => {
         return button(`<span>${plantName(plant)} #${plant.id}<small>${plantDetail(plant)}</small></span>
-          <span class="count-pill">${G.displayRate(plant).toFixed(2)} coins/hr</span>`, "swap-display", {
-          className: "delivery-option", extra: `data-id="${plant.id}" data-plant="${incoming.id}" aria-label="Replace ${plantName(plant)} number ${plant.id}"`,
+          <span class="count-pill">${hourlyCoins(G.displayRate(plant))}</span>`, "swap-display", {
+          className: "delivery-option", extra: `data-id="${plant.id}" data-plant="${incoming.id}" aria-label="Replace ${plantName(plant)} number ${plant.id}, earning ${hourlyCoins(G.displayRate(plant))}"`,
         });
       }).join("")}</div>`);
   }
@@ -1243,14 +1259,14 @@
           showDisplaySwap(plant);
           return;
         }
-        return confirmed(plant.onDisplay ? `${SPECIES[plant.species].name} is on display.` : "Plant removed from display.", [".income-card"]);
+        return confirmed(plant.onDisplay ? `${SPECIES[plant.species].name} is on display.` : "Plant removed from display.", [".income-card"], [".portrait-display"]);
       }
       case "swap-display": {
         const incoming = state.plants.find(item => item.id === Number(data.plant));
         const outgoing = state.plants.find(item => item.id === Number(id));
         dialog.close();
         if (!outgoing || !G.setDisplay(state, incoming, outgoing)) return "That display spot changed. Choose again.";
-        return confirmed(`${SPECIES[incoming.species].name} is on display.`, [".income-card"]);
+        return confirmed(`${SPECIES[incoming.species].name} is on display.`, [".income-card"], [".portrait-display"]);
       }
       case "collect": {
         const available = Math.floor(state.displayBank + .0000001);

@@ -29,7 +29,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - Offspring inherit differences in appearance from their parents, and these differences affect sale value. Cuttings retain the parent's inherited appearance.
 - Plants with at least 83% maturity and 75% health can provide a cutting of the same phenotype. A cutting uses one nursery space and costs its parent 8 maturity points. It roots in 20 to 75 minutes, depending on rarity.
 - You start with four plant and seedling spaces. Each **Extra shelf space** upgrade doubles that total. Prices start at 28 coins and double with each purchase. Upgrades bought before doubling was introduced count automatically. One previous purchase gives you eight spaces and two give you sixteen.
-- You start with two display spots. The Market sells extra spots one at a time, starting at 50 coins and increasing by 30 coins with each purchase. Select **Swap onto display** to replace one when the display is full. Collect whole display coins in the greenhouse.
+- Check the rate under a plant’s portrait to see what it earns per hour on display. The swap dialog shows the hourly rates for both the incoming plant and the plants already displayed. You start with two display spots. The Market sells extra spots one at a time, starting at 50 coins and increasing by 30 coins with each purchase. Select **Swap onto display** to replace one when the display is full. Collect whole display coins in the greenhouse.
 - The device's local clock drives light, drying, growth, and germination. Plant care and display earnings catch up for up to seven days between visits. Progress saves in the browser you play in.
 
 ## Collector orders and market restocks
