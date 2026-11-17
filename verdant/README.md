@@ -39,9 +39,9 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - The Market refreshes every five minutes. Golden Pothos is always available alongside four rotating Common plants. Uncommon, Rare, and Legendary plants appear in limited quantities, and rarer species appear less often. Buying a species for the first time adds it to the Field Guide.
 - The catalog contains 40 species, including bonsai and other woody plants.
 
-## Artwork
+## Artwork and typography
 
-The built-in image generator created the greenhouse banner at `assets/greenhouse.jpg`. The plant illustrations are drawn in the browser and respond to growth, health, and phenotype.
+The built-in image generator created the greenhouse banner at `assets/greenhouse.jpg`. The plant illustrations are drawn in the browser and respond to growth, health, and phenotype. DM Sans and Instrument Serif are included under their respective SIL Open Font Licenses in \x60assets/fonts/\x60.
 
 <details>
 <summary>Banner prompt</summary>

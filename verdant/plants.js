@@ -158,7 +158,7 @@ window.PlantArt = (() => {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
-  const bow = (random() - .43) * width * .38 + (style === "grass" ? Math.sin(angle) * length * .075 : 0);
+    const bow = (random() - .43) * width * .38 + (style === "grass" ? Math.sin(angle) * length * .075 : 0);
     leafShape(ctx, style, width, length, bow);
     const gradient = ctx.createLinearGradient(-width, -length * .68, width * .9, -length * .34);
     gradient.addColorStop(0, rgb(palette.tone));
@@ -192,7 +192,16 @@ window.PlantArt = (() => {
     }
     ctx.stroke();
 
-    ctx.globalAlpha = .11;
+    // A soft reflection makes the leaf surface read at shelf-thumbnail sizes.
+    ctx.globalAlpha = .21;
+    ctx.strokeStyle = rgb(mix(palette.light, [253, 246, 217], .54));
+    ctx.lineWidth = Math.max(.42, width * .11);
+    ctx.beginPath();
+    ctx.moveTo(-width * .31, -length * .18);
+    ctx.quadraticCurveTo(-width * .53, -length * .48, bow - width * .17, -length * .84);
+    ctx.stroke();
+
+    ctx.globalAlpha = .12;
     for (let i = 0; i < 7; i++) {
       ellipse(ctx, (random() - .5) * width * 1.9, -random() * length, width * .055 + .25, width * .09 + .35,
         rgb(i % 2 ? palette.light : palette.dark));
@@ -444,9 +453,9 @@ window.PlantArt = (() => {
   function pot(ctx, tier, glaze) {
     ctx.save();
     const shadow = ctx.createRadialGradient(0, 62, 6, 0, 62, 86);
-    shadow.addColorStop(0, "rgba(46,35,22,.37)");
-    shadow.addColorStop(.46, "rgba(46,35,22,.15)");
-    shadow.addColorStop(1, "rgba(46,35,22,0)");
+    shadow.addColorStop(0, "rgba(29,45,30,.36)");
+    shadow.addColorStop(.46, "rgba(39,55,34,.17)");
+    shadow.addColorStop(1, "rgba(39,55,34,0)");
     ellipse(ctx, 1, 64, 84, 13, shadow);
     ellipse(ctx, 0, 62, 37, 4, glaze.shadow);
 
@@ -483,6 +492,13 @@ window.PlantArt = (() => {
       ellipse(ctx, (grain() - .5) * 115, grain() * 66, .2 + grain() * .8, .17 + grain() * .47,
         i % 2 ? glaze.shadow : glaze.rim);
     }
+    ctx.globalAlpha = .22;
+    ctx.strokeStyle = glaze.light;
+    ctx.lineWidth = 1.7;
+    ctx.beginPath();
+    ctx.moveTo(-42, 21);
+    ctx.bezierCurveTo(-19, 29, 9, 30, 26, 25);
+    ctx.stroke();
     ctx.restore();
 
     ctx.beginPath();

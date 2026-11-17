@@ -420,7 +420,9 @@
   }
 
   function pageIntro(title, description, symbol, stat = "") {
-    return `<header class="page-intro intro-${symbol}"><div><span class="page-icon">${icon(symbol)}</span><h1>${title}</h1><p>${description}</p></div>${stat}</header>`;
+    return `<header class="page-intro intro-${symbol}"><div class="intro-heading">
+      <span class="page-icon">${icon(symbol)}</span><div><h1>${title}</h1><p>${description}</p></div>
+    </div>${stat}</header>`;
   }
 
   function rarityFilter(name, selected) {
@@ -458,7 +460,7 @@
       <section aria-labelledby="stock-title">
         <div class="section-heading listing-heading"><div class="heading-with-count"><h2 id="stock-title">Plants for sale</h2>
           <span class="count-pill">${icon("clock")} Restock in ${countdown(G.nextRestock(state, now))}</span></div>${rarityFilter("marketFilter", view.marketFilter)}</div>
-        <p class="section-description">The selection changes every five minutes. Look for limited stock and plants you can add to your Field Guide.</p>
+        <p class="section-description">Stock rotates every five minutes. Buying a new species adds it to your Field Guide.</p>
         ${open ? "" : `<p class="inline-note">${icon("info")} Your shelves are full. Add spaces or sell a plant to make room.</p>`}
         ${stock.length ? `<div class="catalog-grid">${stock.map(({ species, quantity }) => {
           const isNew = !G.speciesUnlocked(state, species);
@@ -614,8 +616,10 @@
     const filtered = CATALOG.filter(species => view.guideFilter === "all" || String(species.tier) === view.guideFilter);
     const stock = filtered.filter(species => G.speciesUnlocked(state, species));
     const hidden = filtered.length - stock.length;
+    const discovered = countSpecies();
     return `${pageIntro("Field Guide", "Track the species and phenotypes you discover as you grow your collection.", "book",
-      `<div class="guide-count"><strong>${countSpecies()} / ${CATALOG.length}</strong><span>Species discovered</span></div>`)}
+      `<div class="guide-count"><strong>${discovered} / ${CATALOG.length}</strong><span>Species discovered</span>
+        <div class="meter" aria-hidden="true" style="--value:${100 * discovered / CATALOG.length}%"><span></span></div></div>`)}
       <section aria-labelledby="catalog-title">
         <div class="section-heading listing-heading"><div class="heading-with-count"><h2 id="catalog-title">Plant catalog</h2><span class="count-pill">${state.discovered.length} / ${totalPhenotypes} phenotypes</span></div>${rarityFilter("guideFilter", view.guideFilter)}</div>
         ${hidden ? `<p class="inline-note">${icon("lock")} ${hidden} hidden ${hidden === 1 ? "species awaits" : "species await"} discovery in the breeding room.</p>` : ""}
