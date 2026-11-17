@@ -122,10 +122,45 @@
     }
   }
 
-  function notify(message) {
+  const feedbackMotion = {
+    card: [
+      { boxShadow: "0 0 0 0 #7da27055" },
+      { boxShadow: "0 0 0 5px #7da27000" },
+    ],
+    plant: [
+      { rotate: "0deg", scale: "1" }, { rotate: "-1.5deg", scale: "1.025" },
+      { rotate: ".8deg", scale: "1.01" }, { rotate: "0deg", scale: "1" },
+    ],
+    wallet: [
+      { scale: "1" }, { scale: "1.09", backgroundColor: "#fff2cf" }, { scale: "1" },
+    ],
+    arrival: [
+      { opacity: .6, translate: "0 5px" }, { opacity: 1, translate: "0 0" },
+    ],
+  };
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const feedbackAnimations = new WeakMap();
+  const careMotion = [".plant-scene .plant-art", "plant"];
+  const walletMotion = ["#wallet", "wallet"];
+  const confirmed = (message, ...motions) => ({ message, motions });
+
+  function animateFeedback(target, effect = "card") {
+    if (reducedMotion.matches) return;
+    const element = typeof target === "string" ? document.querySelector(target) : target;
+    if (!element?.animate) return;
+    feedbackAnimations.get(element)?.cancel();
+    const animation = element.animate(feedbackMotion[effect], {
+      duration: effect === "arrival" ? 260 : 460, easing: "ease-out",
+    });
+    feedbackAnimations.set(element, animation);
+  }
+
+  function notify(message, success = false) {
     clearTimeout(toastTimer);
-    toast.innerHTML = `<span class="toast-icon">${icon("leaf")}</span><span>${message}</span>`;
+    toast.innerHTML = `<span class="toast-icon">${icon(success ? "check" : "info")}</span><span>${message}</span>`;
     toast.hidden = false;
+    if (success) animateFeedback(toast, "arrival");
+    else feedbackAnimations.get(toast)?.cancel();
     toastTimer = setTimeout(() => { toast.hidden = true; }, 4000);
   }
 
@@ -317,7 +352,7 @@
         </div>
       </article>`;
     }).join("");
-    const seeds = state.seeds.map(seed => `<a class="shelf-plant seed-slot" href="#breeding"><span class="shelf-placeholder">${icon("sprout")}</span><span><strong>${seed.readyAt <= now ? "Ready to pot" : seed.source === "cutting" ? "Rooting cutting" : "Seed tray"}</strong><small>Reserved space</small></span></a>`).join("");
+    const seeds = state.seeds.map(seed => `<a class="shelf-plant seed-slot" data-seed="${seed.id}" href="#breeding"><span class="shelf-placeholder">${icon("sprout")}</span><span><strong>${seed.readyAt <= now ? "Ready to pot" : seed.source === "cutting" ? "Rooting cutting" : "Seed tray"}</strong><small>Reserved space</small></span></a>`).join("");
     const empty = slots > 0 ? `<a class="shelf-plant empty-slot" href="#market"><span class="shelf-placeholder">${icon("plus")}</span><span><strong>Add a plant</strong><small>${numberFormat.format(slots)} open ${slots === 1 ? "space" : "spaces"}</small></span></a>` : "";
     return `<section class="shelf-section" aria-labelledby="shelf-title">
       <div class="section-heading"><div class="heading-with-count"><h2 id="shelf-title">Your shelves</h2><span class="count-pill">${numberFormat.format(state.capacity - slots)} / ${numberFormat.format(state.capacity)} spaces</span></div>
@@ -376,7 +411,7 @@
             <p>${spaceCost === null ? "Maximum shelf space reached." : "Double the space for plants and seedlings."}</p>
             <small>${numberFormat.format(state.capacity)}${spaceCost === null ? "" : ` → ${numberFormat.format(state.capacity * 2)}`} total spaces</small></div>
           ${spaceCost === null ? "" : button(coins(spaceCost), "expand", {
-            extra: `aria-label="Double shelf space for ${spaceCost} coins"`, disabled: state.coins < spaceCost,
+            extra: `aria-label="Double shelf space for ${numberFormat.format(spaceCost)} coins"`, disabled: state.coins < spaceCost,
           })}</article>
         <article class="paper supply-card"><span class="tile-icon">${icon("display")}</span>
           <div><h3>Display spot</h3><p>Earn coins from one more plant.</p><small>${G.displayCapacity(state)} total spots</small></div>
@@ -403,32 +438,39 @@
       </section>`;
   }
 
-  const orderTitles = { grow: "Room to grow", prune: "Shaped by hand", phenotype: "A collector’s eye" };
-  const orderIcons = { grow: "sprout", prune: "prune", phenotype: "leaf" };
+  const orderLabels = {
+    grow: ["Room to grow", "sprout"], prune: ["Shaped by hand", "prune"], phenotype: ["A collector’s eye", "leaf"],
+    healthy: ["In good health", "heart"], bonsai: ["Small tree, big character", "branch"], windowsill: ["For the windowsill", "sun"],
+  };
 
   function orderRequirement(order) {
     const species = SPECIES[order.species];
-    if (order.slot === "grow") return `Any Common plant at ${order.size}% maturity or higher.`;
-    if (order.slot === "prune") return `${species.name} at ${order.size}% maturity or higher and Shape ${order.quality} or better.`;
-    return `${species.name} with the ${species.phenotypes[order.pheno]} phenotype.`;
+    switch (order.slot) {
+      case "grow": return `Any Common plant at ${order.size}% maturity or higher.`;
+      case "prune": return `${species.name} at ${order.size}% maturity or higher and Shape ${order.quality} or better.`;
+      case "phenotype": return `${species.name} with the ${species.phenotypes[order.pheno]} phenotype.`;
+      case "healthy": return `Any Common plant at ${order.health}% health or higher.`;
+      case "bonsai": return `Any tree at ${order.size}% maturity or higher and Shape ${order.quality} or better.`;
+      case "windowsill": return `${species.name} at ${order.size}% maturity or higher.`;
+    }
   }
 
   function orders(now) {
     return `${pageIntro("Collector Orders", "Deliver plants to local collectors for their sale value plus a coin bonus.", "clipboard",
-      `<span class="count-pill">${icon("clock")} New orders in ${countdown(G.nextOrderDay(now))}</span>`)}
+      `<span class="count-pill">${icon("clock")} Daily refresh in ${countdown(G.nextOrderDay(now))}</span>`)}
       <section aria-labelledby="orders-title">
         <div class="section-heading listing-heading"><h2 id="orders-title">Order board</h2></div>
-        <p class="section-description">Orders rotate at local midnight. Pin one to keep it until you deliver it or unpin it.</p>
+        <p class="section-description">A new request appears after each delivery. Open orders refresh at local midnight, and you can pin one to keep it.</p>
         <div class="order-grid">${state.orders.entries.map(order => {
-          const matches = order.fulfilled ? 0 : state.plants.filter(plant => G.orderMatches(order, plant)).length;
-          return `<article class="paper order-card ${order.pinned ? "pinned-order" : ""}">
-            <div class="goal-top"><span class="tile-icon">${icon(orderIcons[order.slot])}</span>
-              ${order.fulfilled ? `<span class="count-pill">${icon("check")} Delivered</span>` :
-                button(order.pinned ? "Pinned" : "Pin order", "pin-order", { symbol: "pin", className: "compact",
-                  extra: `data-id="${order.id}" aria-pressed="${Boolean(order.pinned)}"` })}</div>
-            <h3>${orderTitles[order.slot]}</h3><p>${orderRequirement(order)}</p>
+          const matches = state.plants.some(plant => G.orderMatches(order, plant));
+          const [title, symbol] = orderLabels[order.slot];
+          return `<article class="paper order-card ${order.pinned ? "pinned-order" : ""}" data-order-slot="${order.slot}">
+            <div class="goal-top"><span class="tile-icon">${icon(symbol)}</span>
+              ${button(order.pinned ? "Pinned" : "Pin order", "pin-order", { symbol: "pin", className: "compact",
+                extra: `data-id="${order.id}" aria-pressed="${Boolean(order.pinned)}"` })}</div>
+            <h3 tabindex="-1">${title}</h3><p>${orderRequirement(order)}</p>
             <div class="order-bottom"><span class="goal-reward">${reward(order.bonus)} bonus</span>
-              ${order.fulfilled ? "" : button(matches ? "Choose plant" : "No match yet", "choose-delivery", {
+              ${button(matches ? "Choose plant" : "No match yet", "choose-delivery", {
                 className: "primary compact", disabled: !matches, extra: `data-id="${order.id}"`,
               })}</div>
           </article>`;
@@ -516,7 +558,7 @@
             const name = cutting ? SPECIES[seed.species].name : "";
             const detail = ready ? name || "Pot to reveal the seedling." :
               `${name ? name + " · " : ""}${countdown(seed.readyAt)} remaining`;
-            return `<article class="seed-row"><span class="tile-icon">${icon("sprout")}</span><div><h3>${ready ? "Ready to pot" : cutting ? "Rooting cutting" : "Germinating"}</h3>
+            return `<article class="seed-row" data-seed="${seed.id}"><span class="tile-icon">${icon("sprout")}</span><div><h3>${ready ? "Ready to pot" : cutting ? "Rooting cutting" : "Germinating"}</h3>
               <p>${detail}</p></div>
               ${button(cutting ? "Pot cutting" : "Pot seedling", "pot", { className: "compact", extra: `data-id="${seed.id}"`, disabled: !ready })}</article>`;
           }).join("")}</div>` : `<div class="nursery-empty"><span class="tile-icon">${icon("leaf")}</span><h3>The tray is empty</h3><p>Seeds and cuttings grow here. Each reserves one shelf space.</p></div>`}
@@ -765,7 +807,9 @@
     pouring = session;
     panel.classList.add("is-pouring");
     panel.querySelector("[data-pour-toggle]").textContent = "Stop pouring";
-    panel.querySelector("[data-pour-result]").textContent = "";
+    const result = panel.querySelector("[data-pour-result]");
+    result.textContent = "";
+    result.classList.remove("water-success");
     function tick(current) {
       if (pouring !== session) return;
       const level = G.clamp(session.baseline + pouredAmount(session, current));
@@ -806,9 +850,16 @@
     render();
     updateWaterPanel(panel, plant.water);
     const { min, max } = G.waterRange(plant, now);
-    panel.querySelector("[data-pour-result]").textContent = amount < 1 ? "Hold a little longer to pour." :
+    const inRange = plant.water >= min && plant.water <= max;
+    const result = panel.querySelector("[data-pour-result]");
+    result.textContent = amount < 1 ? "Hold a little longer to pour." :
       plant.water > G.careNeeds(plant, now).wet ? "The soil is soaked. Give it time to dry." :
-      plant.water >= min && plant.water <= max ? "Watered into the target range." : `Watered to ${percent(plant.water)}%.`;
+      inRange ? "Watered into the target range." : `Watered to ${percent(plant.water)}%.`;
+    result.classList.toggle("water-success", amount > 0 && inRange);
+    if (amount > 0 && inRange) {
+      animateFeedback(panel.querySelector("canvas"), "plant");
+      animateFeedback(panel.querySelector(".water-gauge"));
+    }
   }
 
   function showPruning(plant) {
@@ -855,6 +906,8 @@
     const next = panel.querySelectorAll("[data-snip]")[removed.size];
     if (next) next.hidden = false;
     const finish = showPruneProgress();
+    animateFeedback(panel.querySelector("[data-prune-progress]"), "arrival");
+    if (!next) animateFeedback(finish);
     if (restoreFocus) (next || finish).focus({ preventScroll: true });
   }
 
@@ -935,7 +988,7 @@
         className: "delivery-option", extra: `data-id="${order.id}" data-plant="${plant.id}" aria-label="Deliver ${plantName(plant)} number ${plant.id} for ${payout} coins"`,
       });
     }).join("");
-    openDialog(orderTitles[order.slot], `<p>${orderRequirement(order)} The plant you deliver leaves your shelf.</p>
+    openDialog(orderLabels[order.slot][0], `<p>${orderRequirement(order)} The plant you deliver leaves your shelf.</p>
       <div class="delivery-options">${options || "<p>No plants currently meet this order.</p>"}</div>`);
   }
 
@@ -951,17 +1004,17 @@
         increase("nutrients", 36);
         increase("size", plant.health >= 55 ? 18 : 7);
         increase("health", 6);
-        return "Fertilizer applied. New growth is showing.";
+        return confirmed("Fertilizer applied. New growth is showing.", careMotion);
       case "mist":
         if (plant.humidity < needs.humidity) increase("health", 6);
         increase("humidity", 32);
         plant.mistedAt = now;
-        return "Leaves misted.";
+        return confirmed("Leaves misted.", careMotion);
       case "tonic":
         state.inventory.tonic--;
         plant.tonicAt = now;
         increase("health", 19);
-        return "Root tonic applied.";
+        return confirmed("Root tonic applied.", careMotion);
     }
   }
 
@@ -980,8 +1033,9 @@
         if (state.plants.some(item => item.id === Number(id))) state.selected = Number(id);
         return;
       case "favorite":
-        if (plant) plant.favorite = !plant.favorite;
-        return;
+        if (!plant) return;
+        plant.favorite = !plant.favorite;
+        return confirmed("", ['[data-action="favorite"]', "wallet"]);
       case "filter-favorites": {
         view.favoritesOnly = !view.favoritesOnly;
         const favorite = state.plants.find(item => item.favorite);
@@ -995,7 +1049,7 @@
         const renamed = state.plants.find(item => item.id === Number(id));
         if (!G.renamePlant(state, renamed, data.nickname)) return;
         dialog.close();
-        return renamed.nickname ? "Nickname saved." : "Nickname cleared.";
+        return confirmed(renamed.nickname ? "Nickname saved." : "Nickname cleared.", [".plant-heading", "arrival"]);
       }
       case "family":
         showFamily(Number(id));
@@ -1010,7 +1064,7 @@
           return "This repotting option is unavailable.";
         }
         dialog.close();
-        return `${plantName(repotted)} repotted.`;
+        return confirmed(`${plantName(repotted)} repotted.`, careMotion, walletMotion);
       }
       case "move":
         if (plant) showMove(plant, now);
@@ -1027,7 +1081,8 @@
         if (!G.movePlant(moved, spot, now, state)) return;
         if (action === "place") dialog.close();
         state.selected = moved.id;
-        return `${SPECIES[moved.species].name} moved to ${LOCATIONS[spot].toLowerCase()}.`;
+        return confirmed(`${SPECIES[moved.species].name} moved to ${LOCATIONS[spot].toLowerCase()}.`,
+          [`.station-${spot} [data-action="select"][data-id="${moved.id}"]`, "arrival"]);
       }
       case "view-upgrades": {
         const spot = Number(id);
@@ -1038,7 +1093,8 @@
         const spot = Number(data.station);
         if (!G.buyUpgrade(state, spot, id)) return "This shelf upgrade is unavailable.";
         dialog.close();
-        return `${G.STATION_UPGRADES[id].name} installed at the ${LOCATIONS[spot].toLowerCase()} shelf.`;
+        return confirmed(`${G.STATION_UPGRADES[id].name} installed at the ${LOCATIONS[spot].toLowerCase()} shelf.`,
+          [`.station-${spot}`], walletMotion);
       }
       case "watering-can":
         if (plant) showWatering(plant, now);
@@ -1051,7 +1107,7 @@
         const trimmed = state.plants.find(item => item.id === pruning.plantId);
         dialog.close();
         if (!trimmed || !G.prunePlant(trimmed, now)) return "This plant is unavailable for pruning.";
-        return `${SPECIES[trimmed.species].name} pruned. Shape ${trimmed.quality}/5.`;
+        return confirmed(`${SPECIES[trimmed.species].name} pruned. Shape ${trimmed.quality}/5.`, careMotion);
       }
       case "train":
         if (plant && SPECIES[plant.species].shape === "tree") showTraining(plant);
@@ -1061,16 +1117,18 @@
         const tree = state.plants.find(item => item.id === training.plantId);
         dialog.close();
         if (!tree || !G.trainBranches(tree, training.angles)) return "This plant is unavailable for training.";
-        return `${SPECIES[tree.species].name} shape saved.`;
+        return confirmed(`${SPECIES[tree.species].name} shape saved.`, careMotion);
       }
       case "view-cutting":
         if (plant) showCutting(plant, now);
         return;
       case "cut": {
         const parent = state.plants.find(item => item.id === Number(id));
-        if (!G.takeCutting(state, parent, now)) return "This cutting is unavailable right now.";
+        const cutting = G.takeCutting(state, parent, now);
+        if (!cutting) return "This cutting is unavailable right now.";
         dialog.close();
-        return `Cutting from ${SPECIES[parent.species].name} is rooting in the nursery.`;
+        return confirmed(`Cutting from ${SPECIES[parent.species].name} is rooting in the nursery.`,
+          careMotion, [`[data-seed="${cutting.id}"]`, "arrival"]);
       }
       case "feed":
       case "mist":
@@ -1083,21 +1141,21 @@
           showDisplaySwap(plant);
           return;
         }
-        return plant.onDisplay ? `${SPECIES[plant.species].name} is on display.` : "Plant removed from display.";
+        return confirmed(plant.onDisplay ? `${SPECIES[plant.species].name} is on display.` : "Plant removed from display.", [".income-card"]);
       }
       case "swap-display": {
         const incoming = state.plants.find(item => item.id === Number(data.plant));
         const outgoing = state.plants.find(item => item.id === Number(id));
         dialog.close();
         if (!outgoing || !G.setDisplay(state, incoming, outgoing)) return "That display spot changed. Choose again.";
-        return `${SPECIES[incoming.species].name} is on display.`;
+        return confirmed(`${SPECIES[incoming.species].name} is on display.`, [".income-card"]);
       }
       case "collect": {
         const available = Math.floor(state.displayBank + .0000001);
         if (available < 1) return;
         state.displayBank = Math.max(0, state.displayBank - available);
         state.coins += available;
-        return `Collected ${available} ${available === 1 ? "coin" : "coins"}.`;
+        return confirmed(`Collected ${available} ${available === 1 ? "coin" : "coins"}.`, walletMotion, [".income-card"]);
       }
       case "sell":
         if (!plant) return;
@@ -1113,33 +1171,36 @@
         const value = G.salePrice(sold);
         state.coins += value;
         state.plants = state.plants.filter(item => item !== sold);
-        return `Sold ${SPECIES[sold.species].name} for ${value} coins.`;
+        return confirmed(`Sold ${SPECIES[sold.species].name} for ${value} coins.`, walletMotion, [".shelf-section .heading-with-count"]);
       }
       case "claim": {
         const index = Number(id);
         if (!GOALS[index]?.test(state) || state.claimed.includes(index)) return;
         state.claimed.push(index);
         state.coins += GOALS[index].reward;
-        return `Goal complete. You earned ${GOALS[index].reward} coins.`;
+        return confirmed(`Goal complete. You earned ${GOALS[index].reward} coins.`, walletMotion, [".goal-card", "arrival"]);
       }
       case "expand": {
         if (!G.buyShelfUpgrade(state)) return;
-        return `Shelf space doubled. You now have ${numberFormat.format(state.capacity)} spaces.`;
+        return confirmed(`Shelf space doubled. You now have ${numberFormat.format(state.capacity)} spaces.`, ["#shelf-upgrade"], walletMotion);
       }
       case "buy-display":
         if (!G.buyDisplaySpot(state)) return "You need more coins for a display spot.";
-        return `Display spot added. You now have ${G.displayCapacity(state)} spots.`;
+        return confirmed(`Display spot added. You now have ${G.displayCapacity(state)} spots.`,
+          ['.supply-card:has([data-action="buy-display"])'], walletMotion);
       case "buy-supply": {
         const item = SUPPLIES[id];
         if (!item || state.coins < item.cost) return;
         state.coins -= item.cost;
         state.inventory[id] += item.quantity;
-        return `${item.name} added to your supplies.`;
+        return confirmed(`${item.name} added to your supplies.`,
+          [`.supply-card:has([data-action="buy-supply"][data-id="${id}"])`], walletMotion);
       }
       case "buy-plant": {
         const isNew = species && !G.speciesUnlocked(state, species);
         if (!species || !G.buyPlant(state, species, now)) return "That plant is unavailable right now.";
-        return isNew ? `${species.name} discovered. Added to your Field Guide.` : `${species.name} added to your shelves.`;
+        return confirmed(isNew ? `${species.name} discovered. Added to your Field Guide.` : `${species.name} added to your shelves.`,
+          [`.catalog-card:has([data-action="buy-plant"][data-id="${species.id}"])`], walletMotion);
       }
       case "pin-order":
       case "choose-delivery":
@@ -1149,7 +1210,10 @@
           if (dialog.open) dialog.close();
           return "This order is no longer open.";
         }
-        if (action === "pin-order") return G.toggleOrderPin(state, order) ? "Order pinned." : "Order unpinned.";
+        const card = `[data-order-slot="${order.slot}"]`;
+        if (action === "pin-order") {
+          return confirmed(G.toggleOrderPin(state, order) ? "Order pinned." : "Order unpinned.", [card]);
+        }
         if (action === "choose-delivery") {
           chooseDelivery(order);
           return;
@@ -1157,18 +1221,21 @@
         const delivered = state.plants.find(item => item.id === Number(data.plant));
         const payout = G.deliverOrder(state, order, delivered);
         dialog.close();
-        return payout ? `Order delivered. You earned ${payout} coins.` : "This plant is unavailable for delivery.";
+        if (!payout) return "This plant is unavailable for delivery.";
+        requestAnimationFrame(() => app.querySelector(`${card} h3`)?.focus({ preventScroll: true }));
+        return confirmed(`Order delivered. You earned ${payout} coins. New request posted.`, [card, "arrival"], walletMotion);
       }
       case "rescue":
         if (!canRescue()) return;
         G.addPlant(state, "golden", 0, now, "starter");
-        return "Rescue pothos adopted.";
+        return confirmed("Rescue pothos adopted.", careMotion);
       case "breed": {
         const a = state.plants.find(item => String(item.id) === view.parentA);
         const b = state.plants.find(item => String(item.id) === view.parentB);
-        if (!G.breed(state, a, b, now, Math.random, Number(view.favoredParent) || null)) return "This pair is unavailable for breeding right now.";
+        const seed = G.breed(state, a, b, now, Math.random, Number(view.favoredParent) || null);
+        if (!seed) return "This pair is unavailable for breeding right now.";
         view.parentA = view.parentB = view.favoredParent = "";
-        return "Cross started. Check the seed tray for progress.";
+        return confirmed("Cross started. Check the seed tray for progress.", [`[data-seed="${seed.id}"]`, "arrival"], walletMotion);
       }
       case "reuse-parents": {
         const entry = state.journal.find(item => item.id === Number(id));
@@ -1182,7 +1249,7 @@
           firstParent?.focus({ preventScroll: true });
           firstParent?.scrollIntoView({ block: "center" });
         });
-        return "Parents selected.";
+        return confirmed("Parents selected.", [".cross-card"]);
       }
       case "pot": {
         const seed = state.seeds.find(item => item.id === Number(id));
@@ -1190,7 +1257,8 @@
         const seedling = G.potSeed(state, seed, now);
         if (!seedling) return;
         const name = SPECIES[seedling.species].name;
-        return newSpecies ? `${name} discovered. Added to your Field Guide.` : `${name} added to your shelves.`;
+        return confirmed(newSpecies ? `${name} discovered. Added to your Field Guide.` : `${name} added to your shelves.`,
+          [".journal-row:first-child", "arrival"]);
       }
     }
   }
@@ -1200,11 +1268,16 @@
     syncSave();
     const now = Date.now();
     advanceTo(now);
-    const message = perform(action, data, now, plantId);
+    const result = perform(action, data, now, plantId);
     trackRecovery();
     save();
     render();
-    if (message) notify(message);
+    if (!result) return;
+    if (typeof result === "string") notify(result);
+    else {
+      for (const motion of result.motions) animateFeedback(...motion);
+      if (result.message) notify(result.message, true);
+    }
   }
 
   document.addEventListener("click", event => {

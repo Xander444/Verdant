@@ -25,14 +25,14 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - When two plants of the same species have different phenotypes, you can favor one for the cross. The breeding journal remembers your choice.
 - Offspring inherit differences in appearance from their parents, and these differences affect sale value. Cuttings retain the parent's inherited appearance.
 - Plants with at least 83% maturity and 75% health can provide a cutting of the same phenotype. A cutting uses one nursery space and costs its parent 8 maturity points. It roots in 20 to 75 minutes, depending on rarity.
-- You start with four plant and seedling spaces. Each **Extra shelf space** upgrade doubles that total. Upgrades bought before doubling was introduced count automatically. One previous purchase gives you eight spaces and two give you sixteen.
+- You start with four plant and seedling spaces. Each **Extra shelf space** upgrade doubles that total. Prices start at 28 coins and double with each purchase. Upgrades bought before doubling was introduced count automatically. One previous purchase gives you eight spaces and two give you sixteen.
 - You start with two display spots. The Market sells extra spots one at a time, starting at 50 coins and increasing by 30 coins with each purchase. Select **Swap onto display** to replace one when the display is full. Collect whole display coins in the greenhouse.
 - The device's local clock drives light, drying, growth, and germination. Plant care and display earnings catch up for up to seven days between visits. Progress saves in the browser you play in.
 
 ## Collector orders and market restocks
 
-- Three orders rotate at local midnight. Grow, prune, or breed a plant to meet a request, then choose it for delivery. Delivery removes the plant from your shelves and pays its regular sale price plus the posted bonus.
-- Pin one open order to carry it into subsequent days while the other two rotate. Delivering or unpinning it frees the pin.
+- Six collector requests rotate at local midnight. Grow, prune, or breed a plant to meet a request, then choose it for delivery. Each delivery pays the plant’s sale price plus the posted bonus and immediately adds a replacement request.
+- Pin one open order to carry it into subsequent days. Delivering or unpinning it frees the pin.
 - The Market refreshes every five minutes. Golden Pothos is always available alongside four rotating Common plants. Uncommon, Rare, and Legendary plants appear in limited quantities, and rarer species appear less often. Buying a species for the first time adds it to the Field Guide.
 - The catalog contains 40 species, including bonsai and other woody plants.
 

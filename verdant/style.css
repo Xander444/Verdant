@@ -113,7 +113,7 @@ nav a[aria-current] { color: #264f37; background: #e4ecdd; box-shadow: inset 0 0
 }
 .plant-scene.bonsai-scene::after { top: calc(50% + 77px); }
 .plant-art { display: block; width: 100%; height: auto; }
-.plant-scene .plant-art { width: min(118%, 396px); flex: 0 0 auto; margin-top: -16px; }
+.plant-scene .plant-art { transform-origin: 50% 78%; width: min(118%, 396px); flex: 0 0 auto; margin-top: -16px; }
 .plant-status, .stage-label { position: absolute; z-index: 1; left: 15px; display: inline-flex; align-items: center; gap: 6px; border-radius: 30px; }
 .plant-status { top: 15px; background: #fcfaf0; color: #345944; font-size: .73rem; font-weight: 750; border: 1px solid #ecedda; padding: 5px 10px; box-shadow: 0 3px 9px #3a52231b; }
 .plant-status.sick { color: #774a19; background: #f9e9cb; border-color: #ebd7b1; }
@@ -500,6 +500,7 @@ dialog::backdrop { background: #142a20a8; backdrop-filter: blur(2px); }
 .pour-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
 [data-pour-hold] { touch-action: none; user-select: none; -webkit-touch-callout: none; }
 .pour-result { min-height: 1.5em; margin-top: 5px; }
+.dialog-inner .pour-result.water-success { color: #35634b; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   .catalog-art .plant-art { transition: none; }
   .water-can { transition: none; }

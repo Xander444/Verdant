@@ -484,7 +484,7 @@ window.Garden = (() => {
   }
 
   function shelfCost(state) {
-    return state.shelfUpgrades >= MAX_SHELF_UPGRADES ? null : 28 + 12 * state.shelfUpgrades;
+    return state.shelfUpgrades >= MAX_SHELF_UPGRADES ? null : 28 * 2 ** state.shelfUpgrades;
   }
 
   function buyShelfUpgrade(state) {
@@ -555,29 +555,68 @@ window.Garden = (() => {
     return midnight.getTime();
   }
 
+  const orderRequests = {
+    grow: (_, i) => ({ tier: 0, size: [45, 55, 50][i % 3], bonus: [12, 15, 14][i % 3] }),
+    prune: (_, i) => ({
+      species: ["golden", "jade", "heart"][i % 3], size: [70, 65, 75][i % 3], quality: 3, bonus: 23,
+    }),
+    phenotype: (state, i) => {
+      const specialty = CATALOG.filter(species => species.tier > 0 && speciesUnlocked(state, species));
+      const candidates = [SPECIES.golden, ...specialty];
+      const species = candidates[i % candidates.length];
+      const variant = Math.floor(i / candidates.length);
+      return { species: species.id, pheno: 1 + variant % (species.phenotypes.length - 1), bonus: 24 + 9 * species.tier };
+    },
+    healthy: (_, i) => ({ tier: 0, health: [88, 92, 95][i % 3], bonus: [10, 13, 16][i % 3] }),
+    bonsai: (_, i) => ({
+      shape: "tree", size: [45, 55, 65][i % 3], quality: [1, 2, 2][i % 3], bonus: [18, 22, 26][i % 3],
+    }),
+    windowsill: (_, i) => ({
+      species: ["spider", "boston", "peperomia", "wax", "swedish"][i % 5], size: [40, 46, 43][i % 3], bonus: 14,
+    }),
+  };
+
+  function makeOrder(state, slot, previous) {
+    const board = state.orders;
+    let variant = previous ? (previous.variant ?? board.rotation) + 1 : board.rotation;
+    let request = orderRequests[slot](state, variant);
+    if (previous && Object.entries(request).every(([key, value]) => previous[key] === value)) {
+      request = orderRequests[slot](state, ++variant);
+    }
+    const baseId = board.day + "-" + slot;
+    if (previous) board.refills++;
+    const id = previous ? baseId + "-" + board.refills : baseId;
+    return { ...request, slot, id, variant };
+  }
+
   function rotateOrders(state, now) {
     const day = localDay(now);
     const previous = state.orders;
-    if (previous && day <= previous.day) return;
+    const slots = Object.keys(orderRequests);
+    if (previous && day <= previous.day) {
+      if (previous.refills !== undefined) return;
+      previous.refills = 0;
+      // Keep any open requests in an earlier save, including its pin.
+      previous.entries = slots.map(slot => {
+        const order = previous.entries.find(item => item.slot === slot);
+        return order && !order.fulfilled ? order : makeOrder(state, slot, order);
+      });
+      return;
+    }
+
     const rotation = previous ? previous.rotation + day - previous.day : 0;
     const pinned = previous?.entries.find(order => order.pinned && !order.fulfilled);
-    const specialty = CATALOG.filter(species => species.tier > 0 && speciesUnlocked(state, species));
-    const phenotypeSpecies = specialty[rotation % Math.max(1, specialty.length)] || SPECIES.golden;
-    const pheno = 1 + rotation % (phenotypeSpecies.phenotypes.length - 1);
-    const pruningSpecies = [SPECIES.golden, SPECIES.jade, SPECIES.heart][rotation % 3];
-    const entries = [
-      { slot: "grow", tier: 0, size: [45, 55, 50][rotation % 3], bonus: [12, 15, 14][rotation % 3] },
-      { slot: "prune", species: pruningSpecies.id, size: [70, 65, 75][rotation % 3], quality: 3, bonus: 23 },
-      { slot: "phenotype", species: phenotypeSpecies.id, pheno, bonus: 24 + 9 * phenotypeSpecies.tier },
-    ].map(order => pinned?.slot === order.slot ? pinned : { ...order, id: day + "-" + order.slot });
-    state.orders = { day, rotation, entries };
+    state.orders = { day, rotation, refills: 0, entries: [] };
+    state.orders.entries = slots.map(slot => pinned?.slot === slot ? pinned : makeOrder(state, slot));
   }
 
   function orderMatches(order, plant) {
+    const species = SPECIES[plant.species];
     return (order.species === undefined || plant.species === order.species) &&
-      (order.tier === undefined || SPECIES[plant.species].tier === order.tier) &&
+      (order.tier === undefined || species.tier === order.tier) &&
+      (order.shape === undefined || species.shape === order.shape) &&
       (order.pheno === undefined || plant.pheno === order.pheno) &&
-      plant.size >= (order.size || 0) && plant.quality >= (order.quality || 0);
+      plant.size >= (order.size || 0) && plant.quality >= (order.quality || 0) && plant.health >= (order.health || 0);
   }
 
   function toggleOrderPin(state, order) {
@@ -588,13 +627,15 @@ window.Garden = (() => {
   }
 
   function deliverOrder(state, order, plant) {
-    if (!state.orders.entries.includes(order) || order.fulfilled || !state.plants.includes(plant) ||
-        !orderMatches(order, plant)) return 0;
+    const index = state.orders.entries.indexOf(order);
+    if (index < 0 || order.fulfilled || !state.plants.includes(plant) || !orderMatches(order, plant)) return 0;
+    const replacement = makeOrder(state, order.slot, order);
     const payout = salePrice(plant) + order.bonus;
     state.coins += payout;
     state.plants = state.plants.filter(item => item !== plant);
     order.fulfilled = true;
     order.pinned = false;
+    state.orders.entries[index] = replacement;
     return payout;
   }
 
