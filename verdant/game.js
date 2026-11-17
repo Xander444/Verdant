@@ -43,6 +43,7 @@
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
     leaf: '<path d="M5 19c-2-5 1-12 7-13l8-2-2 8c-1 6-7 9-13 7Zm0 0 10-9"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    compare: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14m-6-8h3m6 0h3m-12 4h2m7 0h2"/>',
     shelf: '<path d="M3 4v16M21 4v16M3 9h18M3 16h18m-14-7V5h4v4m3 7v-4h3v4"/>',
     branch: '<path d="M9 21V10m0 6c0-3 3-5 7-5m-7 1C9 9 7 7 4 7m5 4c0-4 4-7 9-7"/><circle cx="18" cy="4" r="1.4"/><circle cx="4" cy="7" r="1.4"/><circle cx="16" cy="11" r="1.4"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',
@@ -398,10 +399,14 @@
 
   function greenhouse(now) {
     const plant = activePlant();
+    const canCompare = plant && state.plants.some(item => item !== plant && item.species === plant.species);
     return `${hero(now)}
       <div class="greenhouse-grid">
         <section aria-labelledby="care-title">
-          <div class="section-heading"><h2 id="care-title">Plant care</h2></div>
+          <div class="section-heading"><h2 id="care-title">Plant care</h2>
+            ${plant ? button("Compare", "compare", { symbol: "compare", className: "compact",
+              disabled: !canCompare, extra: 'title="Compare two plants of this species"' }) : ""}
+          </div>
           ${plant ? plantPicker(plant) + careView(plant, now) : `<div class="paper empty-state"><span class="tile-icon">${icon("sprout")}</span><h3>Your shelves are ready</h3>
             <p>${canRescue() ? "Adopt a free rescue pothos." : G.freeSlots(state) ? "Find a new plant at the market." : "Your shelf spaces are reserved for plants in the nursery."}</p>
             ${canRescue() ? button("Adopt rescue plant", "rescue", { symbol: "sprout", className: "primary" }) :
@@ -704,6 +709,46 @@
       ${family.parents.length || family.offspring.length ? "" : "<p>No relatives recorded yet.</p>"}`);
     dialog.querySelector("#dialog-title").setAttribute("tabindex", "-1");
     dialog.querySelector("#dialog-title").focus();
+  }
+
+  function showComparison(first, secondId, matchMaturity = false) {
+    const species = SPECIES[first.species];
+    const specimens = state.plants.filter(plant => plant.species === species.id);
+    const others = specimens.filter(plant => plant.id !== first.id);
+    const second = others.find(plant => plant.id === secondId) ?? others[0];
+    if (!second) {
+      if (dialog.open) dialog.close();
+      notify("You need two plants of this species to compare them.");
+      return;
+    }
+
+    const column = (id, label, plant, other) => {
+      const phenotype = species.phenotypes[plant.pheno];
+      const options = specimens.map(item =>
+        `<option value="${item.id}"${item === plant ? " selected" : ""}${item === other ? " disabled" : ""}>${plantName(item)} #${item.id} · ${species.phenotypes[item.pheno]}</option>`
+      ).join("");
+      const metrics = [
+        ["Health", `${percent(plant.health)}%`],
+        ["Maturity", `${percent(plant.size)}%`],
+        ["Shape", `${plant.quality}/5`],
+        ["Sale value", `${numberFormat.format(G.salePrice(plant))} coins`],
+        ["Display rate", `${G.displayRate(plant).toFixed(2)} coins/hr`],
+      ];
+      return `<article class="compare-column">
+        <label for="${id}">${label}</label>
+        <select id="${id}" data-compare-input>${options}</select>
+        <div class="compare-portrait">${canvas(species, { ...plant, size: matchMaturity ? 72 : plant.size })}</div>
+        <p class="compare-phenotype">${phenotype}</p>
+        <dl>${metrics.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("")}</dl>
+      </article>`;
+    };
+    openDialog(`Compare ${species.name}`, `<div class="plant-comparison">
+      <label class="compare-maturity"><input type="checkbox" id="compare-maturity" data-compare-input${matchMaturity ? " checked" : ""}> Match portrait maturity</label>
+      <div class="compare-grid">
+        ${column("compare-first", "First plant", first, second)}
+        ${column("compare-second", "Second plant", second, first)}
+      </div>
+    </div>`);
   }
 
   function showNickname(plant) {
@@ -1092,6 +1137,9 @@
         if (view.favoritesOnly && !plant?.favorite && favorite) state.selected = favorite.id;
         return;
       }
+      case "compare":
+        if (plant) showComparison(plant);
+        return;
       case "nickname":
         if (plant) showNickname(plant);
         return;
@@ -1386,6 +1434,20 @@
     runAction(form.dataset.plantForm, { ...Object.fromEntries(new FormData(form)), id: form.dataset.id });
   });
   dialog.addEventListener("change", event => {
+    if (event.target.matches("[data-compare-input]")) {
+      const firstId = Number(dialog.querySelector("#compare-first").value);
+      const secondId = Number(dialog.querySelector("#compare-second").value);
+      const matchMaturity = dialog.querySelector("#compare-maturity").checked;
+      const first = state.plants.find(plant => plant.id === firstId);
+      if (!first || !state.plants.some(plant => plant.id === secondId)) {
+        dialog.close();
+        notify("A plant in this comparison has left your shelves.");
+        return;
+      }
+      showComparison(first, secondId, matchMaturity);
+      dialog.querySelector(`#${event.target.id}`)?.focus({ preventScroll: true });
+      return;
+    }
     if (event.target.closest('[data-plant-form="save-repot"]')) updateRepot(Date.now());
     if (!training || !event.target.matches("[data-training-branch]")) return;
     training.active = Number(event.target.value);
