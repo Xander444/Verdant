@@ -329,7 +329,7 @@
     const slots = G.freeSlots(state);
     const plantTile = item => {
       const species = SPECIES[item.species];
-      return `<button class="shelf-plant ${item === plant ? "selected" : ""}" type="button" draggable="true" data-action="select" data-shelf-tile data-id="${item.id}" aria-pressed="${item === plant}">
+      return `<button class="shelf-plant ${item === plant ? "selected" : ""}" type="button" draggable="true" data-action="select" data-id="${item.id}" aria-pressed="${item === plant}">
         <span class="shelf-preview">${canvas(species, item)}${item.onDisplay ? `<span class="shelf-display" title="On display">${icon("display")}</span>` : ""}
           ${item.favorite ? `<span class="shelf-favorite" title="Favorite">${icon("star")}</span>` : ""}</span>
         <span class="shelf-plant-name"><strong title="${plantName(item)}">${plantName(item)}</strong><small title="${plantDetail(item)}">${plantDetail(item)}</small></span>
@@ -1136,7 +1136,6 @@
       case "select":
         if (!state.plants.some(item => item.id === Number(id))) return;
         state.selected = Number(id);
-        if (data.shelfTile !== undefined) requestAnimationFrame(() => document.querySelector("#care-plant")?.focus());
         return;
       case "step-plant": {
         const total = state.plants.length;
@@ -1384,6 +1383,7 @@
   }
 
   function runAction(action, data) {
+    const scroll = action === "select" || action === "step-plant" ? window.scrollY : null;
     const plantId = activePlant()?.id;
     syncSave();
     const now = Date.now();
@@ -1392,6 +1392,7 @@
     trackRecovery();
     save();
     render();
+    if (scroll !== null && window.scrollY !== scroll) window.scrollTo(0, scroll);
     if (!result) return;
     if (typeof result === "string") notify(result);
     else {

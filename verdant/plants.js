@@ -233,8 +233,22 @@ window.PlantArt = (() => {
     juniper: { spread: 1.02, height: .87, lean: 25, length: 25, width: .15, leaves: 14, style: "spear" },
   };
 
+  // Fill the fan between existing shoots as new ones appear.
+  function shootPosition(index) {
+    let position = 0;
+    let step = .5;
+    while (index > 0) {
+      if (index % 2) position += step;
+      step /= 2;
+      index = Math.floor(index / 2);
+    }
+    return position * 2 - 1;
+  }
+
   function drawTree(ctx, species, plant, palette, random, drawLeaf) {
     const form = treeForms[species.id];
+    const maturity = plant.size / 100;
+    const trunkBase = 7.5 + maturity * 4.5;
     const trunk = ctx.createLinearGradient(-10, 0, 12, -4);
     trunk.addColorStop(0, "#4a382b");
     trunk.addColorStop(.33, "#b0936d");
@@ -242,11 +256,11 @@ window.PlantArt = (() => {
     trunk.addColorStop(1, "#412f25");
     const top = form.height * 126;
     ctx.beginPath();
-    ctx.moveTo(-12, 5);
+    ctx.moveTo(-trunkBase, 5);
     ctx.bezierCurveTo(-8, -19, -15, -48, form.lean * .32, -66);
     ctx.bezierCurveTo(form.lean * .77, -93, form.lean - 4, -top + 13, form.lean, -top);
     ctx.bezierCurveTo(form.lean + 5, -top + 9, form.lean + 5, -96, form.lean * .38 + 9, -66);
-    ctx.bezierCurveTo(-1, -43, 3, -18, 13, 5);
+    ctx.bezierCurveTo(-1, -43, 3, -18, trunkBase + 1, 5);
     ctx.closePath();
     ctx.fillStyle = trunk;
     ctx.fill();
@@ -265,29 +279,37 @@ window.PlantArt = (() => {
     stem(ctx, -9, 1, -25, 7, -10, "#896346", 3.6);
     stem(ctx, 9, 0, 22, 6, 9, "#775436", 3.4);
     const crowns = [[-77, -64], [65, -77], [-51, -100], [43, -117], [-4, -143]];
-    const spread = form.spread * (1 - .033 * plant.quality);
+    const spread = form.spread * (.82 + maturity * .18) * (1 - .033 * plant.quality);
     const angles = branchAngles(plant);
     const tips = crowns.map(([x, y], i) => {
       const branchX = (i + 1) * form.lean / 8;
       const branchY = y * form.height + 20;
       const dx = x * spread + form.lean * .64 - branchX;
-      const dy = -20;
+      const dy = -15 - maturity * 5;
       const angle = angles[i] * Math.PI / 180;
       const tipX = branchX + dx * Math.cos(angle) - dy * Math.sin(angle);
       const tipY = branchY + dx * Math.sin(angle) + dy * Math.cos(angle);
-      stem(ctx, branchX, branchY, tipX, tipY, tipX * .32, "#765138", 5 - i * .53);
+      stem(ctx, branchX, branchY, tipX, tipY, tipX * .32, "#765138", (5 - i * .53) * (.68 + maturity * .32));
       return [tipX, tipY];
     });
-    const count = form.leaves + Math.floor(plant.quality / 2);
+    const count = Math.round(form.leaves * (.54 + maturity * .58)) + Math.floor(plant.quality / 2);
+    const fanRadius = 14 + maturity * 10;
     for (const [x, y] of tips) {
+      const branchRandom = generator(Math.floor(random() * 4294967296));
+      if (maturity > .42) {
+        for (const side of [-1, 1]) {
+          stem(ctx, x * .96, y + 3, x + side * fanRadius * .71, y - fanRadius * .31,
+            side * 4, "#806044", .8 + maturity * .6);
+        }
+      }
       for (let i = 0; i < count; i++) {
-        const offset = (i / (count - 1) - .5) * 44;
-        const sway = (random() - .5) * 14;
+        const offset = shootPosition(i + 1) * fanRadius;
+        const sway = (branchRandom() - .5) * 14;
         const pendant = species.id === "wisteria" && i % 2 === 0;
         const angle = (pendant ? Math.PI : 0) + offset * .037 + sway * .012;
-        const length = form.length * (.72 + random() * .40);
+        const length = form.length * (.71 + branchRandom() * .39);
         const leafY = y + sway + (pendant ? 6 : 0);
-        const texture = generator(Math.floor(random() * 4294967296));
+        const texture = generator(Math.floor(branchRandom() * 4294967296));
         drawLeaf(ctx, x + offset, leafY, angle, length, length * form.width, form.style, palette, texture);
         if (species.id === "pomegranate" && i % 4 === 0) {
           flowerHead(ctx, x + offset * .85, leafY - 17, 5.7, mix([199, 89, 68], palette.accent, plant.pheno * .12), 5, texture);
@@ -351,19 +373,25 @@ window.PlantArt = (() => {
     const random = generator(species.position * 183 + species.tier * 41 + 17 + plant.pheno * 43);
     const palette = leafPalette(species, plant);
     const shape = species.shape;
+    const maturity = plant.size / 100;
     if (shape === "tree") return drawTree(ctx, species, plant, palette, random, drawLeaf);
 
     if (species.id === "echeveria" || species.id === "glass") {
       const rings = species.id === "glass" ? [[0, 9, 58], [1.3, 8, 48], [2.4, 6, 40], [2.8, 5, 30]]
         : [[0, 11, 78], [1.5, 9, 64], [2.2, 7, 47], [2.4, 5, 29]];
-      for (const [turn, leaves, length] of rings) {
-        const angles = Array.from({ length: leaves }, (_, i) => turn + i / leaves * Math.PI * 2);
+      const startsAt = [.43, .20, 0, 0];
+      for (const [index, [turn, leaves, length]] of rings.entries()) {
+        if (maturity < startsAt[index]) continue;
+        const filled = Math.min(1, (maturity - startsAt[index]) / .41);
+        const count = Math.round(leaves * (.57 + filled * .43));
+        const angles = Array.from({ length: count }, (_, i) => turn + i / count * Math.PI * 2);
         angles.sort((a, b) => Math.cos(b) - Math.cos(a));
         for (const angle of angles) {
           const x = Math.sin(angle);
           const y = Math.cos(angle);
           const tilt = Math.atan2(x, y * .58);
-          drawLeaf(ctx, x * 11, -13 - y * 9, tilt, length * (1 - Math.abs(y) * .28 - plant.quality * .022), length * .24,
+          const blade = length * (.8 + filled * .2);
+          drawLeaf(ctx, x * 11, -13 - y * 9, tilt, blade * (1 - Math.abs(y) * .28 - plant.quality * .022), blade * .24,
             "succulent", palette, generator(Math.floor(random() * 4294967296)));
         }
       }
@@ -371,20 +399,20 @@ window.PlantArt = (() => {
     }
 
     const habit = speciesHabits[species.id] ? { ...habits[shape], ...speciesHabits[species.id] } : habits[shape];
-    const count = Math.round(habit.count + plant.size * habit.fullness + plant.quality * .55);
+    const count = Math.round(habit.count * (.64 + maturity * .38) + plant.size * habit.fullness * 1.06 + plant.quality * .55);
     const wilt = Math.max(0, (76 - plant.health) / 85);
-    const vigor = 1 - plant.quality * .025;
+    const vigor = (1 - plant.quality * .025) * (.91 + maturity * .09);
+    const blossomRandom = generator(Math.floor(random() * 4294967296));
     const stems = Array.from({ length: count }, (_, i) => {
-      const spread = (i / (count - 1)) * 2 - 1;
-      const along = spread + (random() - .5) * .2;
+      const along = shootPosition(i + 1) + (random() - .5) * .14;
       const reach = along * (habit.width + random() * 28) * vigor;
       const rise = habit.height + random() * habit.lift - Math.abs(along) * (habit.drape + wilt * 24);
-      return { along, reach, rise, scale: .78 + random() * .36, turn: (random() - .5) * .65 };
+      return { along, reach, rise, scale: .78 + random() * .36, turn: (random() - .5) * .65,
+        brush: generator(Math.floor(random() * 4294967296)) };
     }).sort((a, b) => b.rise - a.rise);
     const stemInk = rgb(mix(palette.base, ink.dark, .53));
-    const leafBrush = () => generator(Math.floor(random() * 4294967296));
-
-    for (const { along, reach, rise, scale, turn } of stems) {
+    for (const { along, reach, rise, scale, turn, brush } of stems) {
+      const leafBrush = () => generator(Math.floor(brush() * 4294967296));
       const startX = along * 15;
       const endY = -rise;
       if (shape === "grass" || shape === "spear") {
@@ -418,6 +446,7 @@ window.PlantArt = (() => {
       const tilt = along * habit.angle + turn;
       drawLeaf(ctx, reach, endY, tilt, length, length * habit.blade, leafStyle, palette, leafBrush());
       for (let i = 0; i < habit.sides.length; i++) {
+        if (i > 0 && maturity < .28 + Math.abs(along) * .23) continue;
         const [t, sway, fullness] = habit.sides[i];
         const [x, y] = stemAt(t);
         drawLeaf(ctx, x, y, tilt + sway, length * fullness, length * habit.blade * fullness, leafStyle, palette, leafBrush());
@@ -425,14 +454,16 @@ window.PlantArt = (() => {
     }
 
     const flowers = blossomForms[species.id];
-    if (flowers && plant.health >= 54) {
-      const [count, color, height, size] = flowers;
+    if (flowers && plant.health >= 54 && maturity >= .28) {
+      const [maximum, color, height, size] = flowers;
+      const count = Math.max(1, Math.round(maximum * maturity));
       for (let i = 0; i < count; i++) {
-        const spread = (i / Math.max(1, count - 1)) - .5;
-        const x = spread * 108 + (random() - .5) * 18;
-        const y = -(height + random() * 18 - Math.abs(spread) * 26);
+        const spread = shootPosition(i + 1) * .58;
+        const x = spread * 108 + (blossomRandom() - .5) * 18;
+        const y = -(height + blossomRandom() * 18 - Math.abs(spread) * 26);
         stem(ctx, spread * 13, 0, x, y, x * .19, stemInk, 1.2);
-        flowerHead(ctx, x, y, size * (.75 + random() * .42), mix(color, palette.accent, plant.pheno * .045), species.id === "black" ? 4 : 5, random);
+        flowerHead(ctx, x, y, size * (.75 + blossomRandom() * .42), mix(color, palette.accent, plant.pheno * .045),
+          species.id === "black" ? 4 : 5, blossomRandom);
       }
     }
   }

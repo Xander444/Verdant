@@ -41,7 +41,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 
 ## Artwork and typography
 
-The built-in image generator created the greenhouse banner at `assets/greenhouse.jpg`. The plant illustrations are drawn in the browser and respond to growth, health, and phenotype. DM Sans and Instrument Serif are included under their respective SIL Open Font Licenses in \x60assets/fonts/\x60.
+The built-in image generator created the greenhouse banner at `assets/greenhouse.jpg`. The plant illustrations are drawn in the browser and respond to growth, health, and phenotype. As plants mature, they fill out with new foliage, branches, or leaf rings, depending on the species. DM Sans and Instrument Serif are included under their respective SIL Open Font Licenses in \x60assets/fonts/\x60.
 
 <details>
 <summary>Banner prompt</summary>
