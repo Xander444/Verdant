@@ -26,6 +26,19 @@ window.Garden = (() => {
     curtain: { name: "Shade curtain", cost: 38, stations: [1], description: "Filters afternoon sun for shade-loving plants and slows soil drying." },
     timer: { name: "Lamp timer", cost: 46, stations: [2], description: "Dims the lamp to window-light levels during the day and slows soil drying." },
   };
+  const POT_STYLES = {
+    original: { name: "Original pot", cost: 0 },
+    terracotta: { name: "Terracotta", cost: 8 },
+    ceramic: { name: "Blue glazed ceramic", cost: 12 },
+    shallow: { name: "Shallow stoneware", cost: 10 },
+  };
+  const SOIL_MIXES = {
+    standard: { name: "Standard mix", cost: 0, drying: 1 },
+    retaining: { name: "Moisture-retaining mix", cost: 6, drying: .75 },
+    draining: { name: "Fast-draining mix", cost: 6, drying: 1.3 },
+  };
+  const potStyle = plant => Object.hasOwn(POT_STYLES, plant.pot) ? plant.pot : "original";
+  const soilMix = plant => Object.hasOwn(SOIL_MIXES, plant.soil) ? plant.soil : "standard";
   const CLASSIC_GROUP_SIZE = 5;
   const CLASSIC_SPECIES_COUNT = RARITIES.length * CLASSIC_GROUP_SIZE;
   const WOODY_GROUP_START = 8;
@@ -180,6 +193,41 @@ window.Garden = (() => {
     return plant;
   }
 
+  function updatePortraits(state, plant, changes) {
+    Object.assign(plant, changes);
+    const record = state.journal.find(entry => entry.id === plant.id);
+    if (record) Object.assign(record, changes);
+    for (const entry of [...state.journal, ...state.seeds]) {
+      for (const parent of entry.parents ?? []) {
+        if (parent.id === plant.id) Object.assign(parent, changes);
+      }
+    }
+  }
+
+  function renamePlant(state, plant, name) {
+    if (!state.plants.includes(plant) || typeof name !== "string") return false;
+    const nickname = [...name.trim().replace(/\s+/g, " ")].slice(0, 24).join("");
+    updatePortraits(state, plant, { nickname });
+    return true;
+  }
+
+  function repotCost(plant, pot, soil) {
+    if (!Object.hasOwn(POT_STYLES, pot) || !Object.hasOwn(SOIL_MIXES, soil)) return null;
+    if (pot === potStyle(plant) && soil === soilMix(plant)) return null;
+    const potCost = pot === potStyle(plant) ? 0 : POT_STYLES[pot].cost;
+    const soilCost = soil === soilMix(plant) ? 0 : SOIL_MIXES[soil].cost;
+    return potCost + soilCost;
+  }
+
+  function repotPlant(state, plant, pot, soil) {
+    if (!state.plants.includes(plant)) return false;
+    const cost = repotCost(plant, pot, soil);
+    if (cost === null || state.coins < cost) return false;
+    state.coins -= cost;
+    updatePortraits(state, plant, { pot, soil });
+    return true;
+  }
+
   function displayRate(plant) {
     const tier = SPECIES[plant.species].tier;
     return [.38, .86, 1.84, 3.5][tier] *
@@ -283,7 +331,7 @@ window.Garden = (() => {
     const species = SPECIES[plant.species];
     const shapeFactor = species.shape === "succulent" ? .57 : species.shape === "fern" ? 1.21 : 1;
     const locationFactor = curtainClosed(now, location, state) ? .84 : lampDimmed(now, location, state) ? 1 : [.84, 1, 1.17][location];
-    return [1.35, 1.85, 2.55, 3.35][species.tier] * phaseAt(now).evaporation * shapeFactor * locationFactor;
+    return [1.35, 1.85, 2.55, 3.35][species.tier] * phaseAt(now).evaporation * shapeFactor * locationFactor * SOIL_MIXES[soilMix(plant)].drying;
   }
 
   function movePlant(plant, location, now, state) {
@@ -528,6 +576,33 @@ window.Garden = (() => {
     return favoredId === null ? .5 : favoredId === a.id ? FAVOR_WEIGHT : 1 - FAVOR_WEIGHT;
   }
 
+  function portrait(plant) {
+    const { id, species, pheno, nickname, pot, soil } = plant;
+    return { id, species, pheno, nickname, pot, soil, traits: { ...traitsFor(plant) } };
+  }
+
+  function familyFor(state, id) {
+    const owned = new Map(state.plants.map(plant => [plant.id, plant]));
+    const recorded = new Map(state.journal.map(plant => [plant.id, plant]));
+    const entry = recorded.get(id);
+    const latest = record => owned.get(record.id) ?? recorded.get(record.id) ?? record;
+    const offspring = state.journal.filter(item => (item.parents ?? []).some(parent => parent.id === id));
+    const snapshot = offspring[0]?.parents.find(parent => parent.id === id);
+    const specimen = owned.get(id) ?? entry ?? snapshot;
+    if (!specimen) return null;
+
+    const parents = (entry?.parents ?? []).map(latest);
+    const parentIds = new Set(parents.map(parent => parent.id));
+    const siblings = parentIds.size === 2 ? state.journal.filter(item =>
+      item.id !== id && item.parents?.length === 2 && item.parents.every(parent => parentIds.has(parent.id))
+    ) : [];
+    return {
+      specimen, parents, siblings: siblings.map(latest),
+      offspring: offspring.map(record => ({ plant: latest(record), cutting: record.source === "cutting" })),
+      cutting: entry?.source === "cutting",
+    };
+  }
+
   function breed(state, a, b, now, random = Math.random, requestedId = null) {
     if (!a || !b || a.id === b.id || freeSlots(state) < 1 || state.coins < CROSS_COST ||
         parentProblem(a, now) || parentProblem(b, now)) return null;
@@ -542,7 +617,7 @@ window.Garden = (() => {
       ? chosen.pheno
       : Math.floor(random() * species.phenotypes.length);
     const duration = [4, 6, 10, 16][species.tier] * MINUTE;
-    const parents = [a, b].map(({ id, species, pheno }) => ({ id, species, pheno }));
+    const parents = [a, b].map(portrait);
     const traits = inheritTraits(a, b, random);
     const seed = { id: state.nextId++, species: species.id, pheno, readyAt: now + duration, parents, favoredParentId, traits };
     state.seeds.push(seed);
@@ -564,10 +639,10 @@ window.Garden = (() => {
 
   function takeCutting(state, plant, now) {
     if (!state.plants.includes(plant) || freeSlots(state) < 1 || cuttingProblem(plant, now)) return null;
-    const { id, species, pheno } = plant;
+    const { species, pheno } = plant;
     const cutting = {
       id: state.nextId++, species, pheno, readyAt: now + rootingTime(plant),
-      source: "cutting", parents: [{ id, species, pheno }], traits: { ...traitsFor(plant) },
+      source: "cutting", parents: [portrait(plant)], traits: { ...traitsFor(plant) },
     };
     state.seeds.push(cutting);
     plant.size -= 8;
@@ -583,7 +658,7 @@ window.Garden = (() => {
       ? inheritTraits(parents[0], parents[1], () => .5) : traitsFor(parents[0] ?? seed));
     const plant = addPlant(state, seed.species, seed.pheno, now, "seedling", traits);
     state.journal.unshift({
-      id: plant.id, species: plant.species, pheno: plant.pheno, parents: seed.parents || [], pottedAt: now,
+      id: plant.id, species: plant.species, pheno: plant.pheno, parents: parents.map(portrait), pottedAt: now,
       favoredParentId: seed.favoredParentId ?? null,
       source: seed.source, traits: { ...traits },
     });
@@ -606,7 +681,8 @@ window.Garden = (() => {
 
   return {
     MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES,
-    CATALOG, SPECIES, SUPPLIES, GOALS, clamp, traitsFor, traitScales,
+    CATALOG, SPECIES, SUPPLIES, GOALS, POT_STYLES, SOIL_MIXES, clamp, traitsFor, traitScales,
+    potStyle, soilMix, repotCost, repotPlant, renamePlant, familyFor,
     phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
     hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, displayCapacity, displaySpotCost, buyDisplaySpot,
     enforceDisplayLimit, setDisplay,

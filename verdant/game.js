@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const G = window.Garden;
-  const { SPECIES, CATALOG, RARITIES, LOCATIONS, GOALS, SUPPLIES, HOUR } = G;
+  const { SPECIES, CATALOG, RARITIES, LOCATIONS, GOALS, SUPPLIES, POT_STYLES, SOIL_MIXES, HOUR } = G;
   const STORE = "verdant-greenhouse-v1";
   const app = document.querySelector("#app");
   const dialog = document.querySelector("#dialog");
@@ -27,6 +27,7 @@
     drop: '<path d="M12 3c3 4 6 7 6 11a6 6 0 1 1-12 0c0-4 3-7 6-11Z"/><path d="M9 14c0 2 1 3 3 3"/>',
     can: '<path d="M7 12h10v6a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2Zm10 3 4-5-2-1-2 3M7 13a3 3 0 1 0 0 5m2-6V9a3 3 0 0 1 6 0v3m6-7v.01M18 6v.01"/>',
     lamp: '<path d="M12 3v3M8 6h8l4 7H4Zm-4 10-1 2m5-2v4m8-4v4m4-4 1 2"/>',
+    star: '<path d="m12 3 2.8 5.7 6.3.9-4.5 4.4 1 6.3-5.6-3-5.6 3 1-6.3-4.5-4.4 6.3-.9Z"/>',
     heart: '<path d="M12 20 4 12a5 5 0 0 1 8-6 5 5 0 0 1 8 6Z"/>',
     prune: '<circle cx="5.5" cy="5.5" r="2.5"/><circle cx="5.5" cy="18.5" r="2.5"/><path d="m7.5 7.5 13 13m-13-4 13-13m-8 8L10 14"/>',
     fertilizer: '<path d="M8 3h8m-7 0v6l-5 8a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-8V3M7 14h10m-6 3h.01"/>',
@@ -54,16 +55,24 @@
   const stationIcons = ["leaf", "sun", "lamp"];
   const stationNotes = ["Soft light, slower drying", "Light follows the day", "Steady light, faster drying"];
   const totalPhenotypes = CATALOG.reduce((sum, species) => sum + species.phenotypes.length, 0);
+  const escapeText = value => String(value).replace(/[&<>"']/g, character => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]);
+  const plantName = plant => escapeText(plant.nickname || SPECIES[plant.species].name);
+  const plantDetail = plant => {
+    const species = SPECIES[plant.species];
+    return plant.nickname ? species.name + " · " + species.phenotypes[plant.pheno] : species.phenotypes[plant.pheno];
+  };
   const activePlant = () => state.plants.find(plant => plant.id === state.selected) || state.plants[0];
   const canRescue = () => !state.plants.length && G.freeSlots(state) > 0 && state.coins < SPECIES.golden.price;
   const tierBadge = species => `<span class="badge rarity-${species.tier}"><i></i>${RARITIES[species.tier]}</span>`;
   const currentPage = () => ["greenhouse", "market", "orders", "breeding", "guide"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "greenhouse";
   const button = (label, action, { symbol, extra = "", className = "", disabled = false } = {}) =>
     `<button type="button" class="button ${className}" data-action="${action}" ${extra}${disabled ? " disabled" : ""}>${symbol ? icon(symbol) : ""}${label}</button>`;
-  function canvas(species, { id, traits, pheno = 0, size = 58, health = 95, quality = 0, training, large = false } = {}) {
+  function canvas(species, { id, traits, pheno = 0, size = 58, health = 95, quality = 0, training, pot, large = false } = {}) {
     const scales = id === undefined ? null : G.traitScales({ id, species: species.id, pheno, traits });
     const form = scales ? ` data-form="${scales.form}" data-leaf="${scales.leaf}"` : "";
-    return `<canvas class="plant-art" width="${large ? 680 : 340}" height="${large ? 610 : 305}" data-species="${species.id}" data-pheno="${pheno}" data-size="${percent(size)}" data-health="${percent(health)}" data-quality="${quality}"${form}${training ? ` data-training="${G.branchAngles({ training }).join(",")}"` : ""} aria-hidden="true"></canvas>`;
+    return `<canvas class="plant-art" width="${large ? 680 : 340}" height="${large ? 610 : 305}" data-species="${species.id}" data-pheno="${pheno}" data-size="${percent(size)}" data-health="${percent(health)}" data-quality="${quality}" data-pot="${G.potStyle({ pot })}"${form}${training ? ` data-training="${G.branchAngles({ training }).join(",")}"` : ""} aria-hidden="true"></canvas>`;
   }
 
   let state;
@@ -74,7 +83,7 @@
   let pouring;
   let pruning;
   let training;
-  let view = { marketFilter: "all", guideFilter: "all", parentA: "", parentB: "", favoredParent: "" };
+  let view = { marketFilter: "all", guideFilter: "all", parentA: "", parentB: "", favoredParent: "", favoritesOnly: false };
 
   function syncSave() {
     try {
@@ -180,20 +189,25 @@
     const sick = plant.health < 55;
     const waterMood = plant.water < needs.dry ? "warning" : plant.water > needs.wet ? "warning" : "blue";
     const lightGood = G.lightWorks(plant, now, plant.location, state);
+    const shallow = G.potStyle(plant) === "shallow" || (G.potStyle(plant) === "original" && species.shape === "tree");
     const stage = plant.size >= 83 ? "Mature" : plant.size >= 42 ? "Established" : plant.size >= 23 ? "Young plant" : "Seedling";
     const healthLabel = sick ? "Needs care" : plant.health < 72 ? "Recovering" : "Healthy";
     const healthTip = sick ? "Needs attention" : plant.health < 72 ? "On the mend" : "Doing well";
     const waterTip = plant.water < needs.dry ? "Soil is dry" : plant.water > needs.wet ? "Soil is too wet" : "Moisture is good";
     return `<article class="care-card paper">
-      <div class="plant-scene ${species.shape === "tree" ? "bonsai-scene " : ""}phase-${G.phaseAt(now).name.toLowerCase()}">
+      <div class="plant-scene ${shallow ? "bonsai-scene " : ""}phase-${G.phaseAt(now).name.toLowerCase()}">
         <span class="plant-status ${sick ? "sick" : plant.health >= 72 ? "healthy" : "recovering"}"><i></i>${healthLabel}</span>
         ${canvas(species, { ...plant, large: true })}
         <span class="stage-label">${icon("sprout")} ${stage}${plant.quality ? ` · Shape ${plant.quality}/5` : ""}</span>
       </div>
       <div class="care-body">
         <div class="plant-heading">
-          <div>${tierBadge(species)}<h3>${species.name}</h3><p>${species.phenotypes[plant.pheno]}</p></div>
-          ${button(icon("book"), "inspect", { className: "icon-button", extra: `data-id="${species.id}" title="Open plant entry" aria-label="Open ${species.name} entry"` })}
+          <div>${tierBadge(species)}<h3>${plantName(plant)}</h3><p>${plantDetail(plant)}</p></div>
+          <div class="plant-heading-actions">
+            ${button(icon("star"), "favorite", { className: "icon-button favorite-button",
+              extra: `aria-pressed="${Boolean(plant.favorite)}" aria-label="Favorite plant" title="Favorite plant"` })}
+            ${button(icon("book"), "inspect", { className: "icon-button", extra: `data-id="${species.id}" title="Open plant entry" aria-label="Open ${species.name} entry"` })}
+          </div>
         </div>
         <div class="metric-grid">
           ${metric("Health", "heart", `${percent(plant.health)}%`, healthTip, plant.health < 72 ? "warning" : "", plant.health)}
@@ -211,6 +225,11 @@
           ${button(`Feed <small>${state.inventory.fertilizer}</small>`, "feed", { symbol: "fertilizer", disabled: !allowed.feed, extra: `title="${allowed.timers.feed > now ? `Ready in ${remaining(allowed.timers.feed, now)}` : "Use one dose of fertilizer"}"` })}
           ${needs.humidity ? button("Mist", "mist", { symbol: "mist", disabled: !allowed.mist }) : ""}
           ${state.inventory.tonic ? button(`Tonic <small>${state.inventory.tonic}</small>`, "tonic", { symbol: "heart", disabled: !allowed.tonic }) : ""}
+        </div>
+        <div class="plant-tools">
+          ${button("Nickname", "nickname", { symbol: "tag", className: "compact" })}
+          ${button("Repot", "repot", { symbol: "sprout", className: "compact" })}
+          ${button("Family tree", "family", { symbol: "branch", className: "compact", extra: `data-id="${plant.id}"` })}
         </div>
         <div class="care-trade">
           ${button(plant.onDisplay ? "Remove from display" : G.displayedPlants(state).length >= G.displayCapacity(state) ? "Swap onto display" : "Put on display", "display", { symbol: "display", className: "text-button" })}
@@ -256,12 +275,14 @@
     const plantTile = item => {
       const species = SPECIES[item.species];
       return `<button class="shelf-plant ${item === plant ? "selected" : ""}" type="button" draggable="true" data-action="select" data-id="${item.id}" aria-pressed="${item === plant}">
-        <span class="shelf-preview">${canvas(species, item)}${item.onDisplay ? `<span class="shelf-display" title="On display">${icon("display")}</span>` : ""}</span>
-        <span><strong>${species.name}</strong><small>${species.phenotypes[item.pheno]}</small></span>
+        <span class="shelf-preview">${canvas(species, item)}${item.onDisplay ? `<span class="shelf-display" title="On display">${icon("display")}</span>` : ""}
+          ${item.favorite ? `<span class="shelf-favorite" title="Favorite">${icon("star")}</span>` : ""}</span>
+        <span><strong>${plantName(item)}</strong><small>${plantDetail(item)}</small></span>
       </button>`;
     };
     const stations = LOCATIONS.map((name, spot) => {
-      const residents = state.plants.filter(item => item.location === spot);
+      const residents = state.plants.filter(item => item.location === spot && (!view.favoritesOnly || item.favorite))
+        .sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)));
       const current = plant?.location === spot;
       const recommended = plant && G.lightWorks(plant, now, spot, state);
       const upgrades = Object.entries(G.STATION_UPGRADES).filter(([id]) => G.hasUpgrade(state, spot, id));
@@ -270,7 +291,7 @@
           <div><h3>${name}</h3><p>${stationNotes[spot]}</p></div>
           ${recommended ? '<span class="count-pill station-recommended">Good light now</span>' : ""}</div>
         <div class="station-pots">${residents.length ? residents.map(plantTile).join("") :
-          `<div class="station-empty">${icon("sprout")} Empty spot</div>`}</div>
+          `<div class="station-empty">${icon("sprout")} ${view.favoritesOnly ? "No favorites here" : "Empty spot"}</div>`}</div>
         ${plant ? `<div class="station-footer"><small title="Current soil drying rate">${icon("drop")} ${dryingLabel(plant, now, spot)}</small>
           ${button(current ? "Here now" : "Move here", "station-place", { className: "compact", disabled: current,
             extra: `data-id="${spot}" data-plant="${plant.id}" aria-label="${current ? `${SPECIES[plant.species].name} is here` : `Move ${SPECIES[plant.species].name} to ${name.toLowerCase()}`}"`,
@@ -285,8 +306,10 @@
     const seeds = state.seeds.map(seed => `<a class="shelf-plant seed-slot" href="#breeding"><span class="shelf-placeholder">${icon("sprout")}</span><span><strong>${seed.readyAt <= now ? "Ready to pot" : seed.source === "cutting" ? "Rooting cutting" : "Seed tray"}</strong><small>Reserved space</small></span></a>`).join("");
     const empty = slots > 0 ? `<a class="shelf-plant empty-slot" href="#market"><span class="shelf-placeholder">${icon("plus")}</span><span><strong>Add a plant</strong><small>${slots} open ${slots === 1 ? "space" : "spaces"}</small></span></a>` : "";
     return `<section class="shelf-section" aria-labelledby="shelf-title">
-      <div class="section-heading"><div class="heading-with-count"><h2 id="shelf-title">Your shelves</h2><span class="count-pill">${state.capacity - slots} / ${state.capacity} spaces</span></div><a class="text-link" href="#market">${icon("plus")} Expand shelves</a></div>
-      ${plant ? `<p class="section-description shelf-hint"><strong>${SPECIES[plant.species].name} selected.</strong> Drag a pot between shelves, or select a pot and choose Move here.</p>` : ""}
+      <div class="section-heading"><div class="heading-with-count"><h2 id="shelf-title">Your shelves</h2><span class="count-pill">${state.capacity - slots} / ${state.capacity} spaces</span></div>
+        <div class="shelf-tools">${button("Favorites", "filter-favorites", { symbol: "star", className: "compact favorite-button",
+          extra: `aria-pressed="${view.favoritesOnly}"` })}<a class="text-link" href="#market">${icon("plus")} Expand shelves</a></div></div>
+      ${plant ? `<p class="section-description shelf-hint"><strong>${plantName(plant)} selected.</strong> Drag a pot between shelves, or select a pot and choose Move here.</p>` : ""}
       <div class="station-grid">${stations}</div>
       ${seeds || empty ? `<div class="shelf-grid shelf-extras">${seeds}${empty}</div>` : ""}
     </section>`;
@@ -401,21 +424,24 @@
         <span class="count-pill">${state.journal.length} ${state.journal.length === 1 ? "entry" : "entries"}</span></div></div>
       ${!state.journal.length ? `<div class="paper collection-empty">${icon("book")} Potted seedlings and cuttings appear here with their parent plants.</div>` :
         `<div class="journal-list">${state.journal.map(entry => {
-          const child = SPECIES[entry.species];
+          const specimen = state.plants.find(plant => plant.id === entry.id) ?? entry;
           const pair = entry.parents.map(parent => {
-            const species = SPECIES[parent.species];
-            return `<span><strong>${species.name}</strong> <small>#${parent.id} · ${species.phenotypes[parent.pheno]}</small></span>`;
+            const current = state.plants.find(plant => plant.id === parent.id) ?? parent;
+            return `<span><strong>${plantName(current)}</strong> <small>#${parent.id} · ${plantDetail(current)}</small></span>`;
           }).join("<span aria-hidden=\"true\">×</span>");
           const fromCutting = entry.source === "cutting";
           const favorite = entry.parents.find(parent => parent.id === entry.favoredParentId);
           const canReuse = entry.parents.length === 2 && entry.parents.every(parent => state.plants.some(plant => plant.id === parent.id));
           return `<article class="paper journal-row">
-            <span class="shelf-preview">${canvas(child, { ...entry, size: 38 })}</span>
-            <div><h3>${child.name}</h3><p>${child.phenotypes[entry.pheno]} · ${dateFormat.format(entry.pottedAt)}</p>
+            <span class="shelf-preview">${canvas(SPECIES[entry.species], { ...specimen, size: 65 })}</span>
+            <div><h3>${plantName(specimen)}</h3><p>${plantDetail(specimen)} · ${dateFormat.format(entry.pottedAt)}</p>
               ${favorite ? `<span class="journal-favorite">${icon("leaf")} Favored ${SPECIES[favorite.species].phenotypes[favorite.pheno]} · #${favorite.id}</span>` : ""}
               <div class="journal-parents">${fromCutting ? "Cutting from " : ""}${pair || "Parents unavailable"}</div></div>
-            ${canReuse ? button("Use this pair", "reuse-parents", { symbol: "dna", className: "compact", extra: `data-id="${entry.id}"` }) :
-              entry.parents.length && !fromCutting ? '<small class="journal-unavailable">Pair no longer on shelves</small>' : ""}
+            <div class="journal-actions">
+              ${button("Family tree", "family", { symbol: "branch", className: "compact", extra: `data-id="${entry.id}"` })}
+              ${canReuse ? button("Use this pair", "reuse-parents", { symbol: "dna", className: "compact", extra: `data-id="${entry.id}"` }) :
+                entry.parents.length && !fromCutting ? '<small class="journal-unavailable">Pair no longer on shelves</small>' : ""}
+            </div>
           </article>`;
         }).join("")}</div>`}
     </section>`;
@@ -443,13 +469,12 @@
         <select id="${id}" data-filter="${id}">
           <option value="">Choose a plant</option>
           ${state.plants.map(item => {
-            const option = SPECIES[item.species];
             const blocked = G.parentProblem(item, now);
-            return `<option value="${item.id}"${item === plant ? " selected" : ""}${item === other ? " disabled" : ""}>${option.name} #${item.id}${blocked ? ` · ${blocked}` : ""}</option>`;
+            return `<option value="${item.id}"${item === plant ? " selected" : ""}${item === other ? " disabled" : ""}>${plantName(item)} #${item.id}${blocked ? ` · ${blocked}` : ""}</option>`;
           }).join("")}
         </select>
         <div class="parent-preview">${species ? canvas(species, plant) : icon("sprout")}</div>
-        ${species ? `<p class="parent-detail">${species.phenotypes[plant.pheno]} · ${RARITIES[species.tier]}</p>` : ""}
+        ${species ? `<p class="parent-detail">${plantDetail(plant)} · ${RARITIES[species.tier]}</p>` : ""}
       </div>`;
     };
 
@@ -555,6 +580,94 @@
     openDialog(species.name, `<p>${species.note}</p>
       <p class="species-needs">${icon("sun")} ${LOCATIONS[needs.light]} now · Water below ${needs.dry}%${needs.humidity ? ` · Mist below ${needs.humidity}% humidity` : ""}</p>
       <h3>Phenotypes</h3><div class="phenotypes">${variants}</div>`, tierBadge(species));
+  }
+
+  function showFamily(id) {
+    const family = G.familyFor(state, id);
+    if (!family) return;
+
+    const card = (plant, detail = "") => {
+      const artwork = `<span class="family-art">${canvas(SPECIES[plant.species], {
+        ...plant, size: 72, health: 95, quality: 0, training: undefined,
+      })}</span>
+        <strong>${plantName(plant)}</strong>
+        <small>#${plant.id} · ${plantDetail(plant)}</small>${detail ? `<small>${detail}</small>` : ""}`;
+      return plant.id === id ? `<div class="family-portrait family-current">${artwork}</div>` :
+        button(artwork, "family", { className: "family-portrait", extra: `data-id="${plant.id}"` });
+    };
+    const group = (label, cards) => cards.length
+      ? `<section class="family-group"><h3>${label}</h3><div class="family-grid">${cards.join("")}</div></section>` : "";
+
+    openDialog("Family tree", `<p>Portraits show plants at the same maturity.</p>
+      ${group(family.cutting ? "Cutting source" : "Parents", family.parents.map(plant => card(plant)))}
+      ${group("Selected plant and siblings", [card(family.specimen, "Selected plant"), ...family.siblings.map(plant => card(plant))])}
+      ${group("Offspring and cuttings", family.offspring.map(({ plant, cutting }) => card(plant, cutting ? "Cutting" : "Offspring")))}
+      ${family.parents.length || family.offspring.length ? "" : "<p>No relatives recorded yet.</p>"}`);
+    dialog.querySelector("#dialog-title").setAttribute("tabindex", "-1");
+    dialog.querySelector("#dialog-title").focus();
+  }
+
+  function showNickname(plant) {
+    openDialog("Give your plant a nickname", `<form class="plant-form" data-plant-form="save-nickname" data-id="${plant.id}">
+      <label for="plant-nickname">Nickname</label>
+      <input id="plant-nickname" name="nickname" maxlength="24" value="${escapeText(plant.nickname ?? "")}" placeholder="${SPECIES[plant.species].name}" aria-describedby="nickname-help">
+      <p id="nickname-help">Leave blank to use the species name.</p>
+      <div class="dialog-actions">${button("Cancel", "close")}<button type="submit" class="button primary">Save nickname</button></div>
+    </form>`);
+    const input = dialog.querySelector("#plant-nickname");
+    input.focus();
+    input.select();
+  }
+
+  function showRepot(plant, now) {
+    const options = (choices, current) => Object.entries(choices).map(([id, choice]) =>
+      `<option value="${id}"${id === current ? " selected" : ""}>${choice.name}</option>`).join("");
+    openDialog(`Repot ${plantName(plant)}`, `<form class="plant-form" data-plant-form="save-repot" data-id="${plant.id}">
+      <div class="repot-art">${canvas(SPECIES[plant.species], plant)}</div>
+      <div class="repot-choices">
+        <label>Pot style <select name="pot">${options(POT_STYLES, G.potStyle(plant))}</select></label>
+        <label>Soil mix <select name="soil">${options(SOIL_MIXES, G.soilMix(plant))}</select></label>
+      </div>
+      <div class="repot-rates" role="status">
+        <p><small>Current soil</small><span data-rate-current></span></p>
+        <p><small>Selected mix</small><span data-rate-preview></span></p>
+      </div>
+      <p data-repot-budget></p>
+      <div class="dialog-actions">${button("Cancel", "close")}<button type="submit" class="button primary">Repot</button></div>
+    </form>`);
+    updateRepot(now);
+  }
+
+  function updateRepot(now) {
+    const form = dialog.querySelector('[data-plant-form="save-repot"]');
+    if (!form) return;
+    const plant = state.plants.find(item => item.id === Number(form.dataset.id));
+    const submit = form.querySelector('[type="submit"]');
+    const note = form.querySelector("[data-repot-budget]");
+    if (!plant) {
+      submit.disabled = true;
+      note.textContent = "This plant has left your shelves.";
+      return;
+    }
+
+    const { pot, soil } = form.elements;
+    const preview = form.querySelector("canvas");
+    if (preview.dataset.pot !== pot.value) {
+      preview.dataset.pot = pot.value;
+      window.PlantArt.draw(preview);
+    }
+    const cost = G.repotCost(plant, pot.value, soil.value);
+    const rate = plant => dryingLabel(plant, now, plant.location);
+    for (const [selector, label] of [
+      ["[data-rate-current]", rate(plant)],
+      ["[data-rate-preview]", rate({ ...plant, soil: soil.value })],
+    ]) {
+      const value = form.querySelector(selector);
+      if (value.textContent !== label) value.textContent = label;
+    }
+    note.textContent = cost !== null && cost > state.coins ? `You have ${state.coins} coins.` : "";
+    submit.disabled = cost === null || cost > state.coins;
+    submit.textContent = cost ? `Repot · ${cost} coins` : "Repot";
   }
 
   function showMove(plant, now) {
@@ -784,24 +897,21 @@
   }
 
   function showDisplaySwap(incoming) {
-    const species = SPECIES[incoming.species];
-    openDialog("Swap a display plant", `<p>All ${G.displayCapacity(state)} display spots are filled. Choose which plant to take down to make room for ${species.name}.</p>
+    openDialog("Swap a display plant", `<p>All ${G.displayCapacity(state)} display spots are filled. Choose which plant to take down to make room for ${plantName(incoming)}.</p>
       <div class="delivery-options">${G.displayedPlants(state).map(plant => {
-        const displayed = SPECIES[plant.species];
-        return button(`<span>${displayed.name} #${plant.id}<small>${displayed.phenotypes[plant.pheno]}</small></span>
+        return button(`<span>${plantName(plant)} #${plant.id}<small>${plantDetail(plant)}</small></span>
           <span class="count-pill">${G.displayRate(plant).toFixed(2)} coins/hr</span>`, "swap-display", {
-          className: "delivery-option", extra: `data-id="${plant.id}" data-plant="${incoming.id}" aria-label="Replace ${displayed.name} number ${plant.id}"`,
+          className: "delivery-option", extra: `data-id="${plant.id}" data-plant="${incoming.id}" aria-label="Replace ${plantName(plant)} number ${plant.id}"`,
         });
       }).join("")}</div>`);
   }
 
   function chooseDelivery(order) {
     const options = state.plants.filter(plant => G.orderMatches(order, plant)).map(plant => {
-      const species = SPECIES[plant.species];
       const payout = G.salePrice(plant) + order.bonus;
-      return button(`<span>${species.name} #${plant.id}<small>${species.phenotypes[plant.pheno]} · ${percent(plant.size)}% mature</small></span>
+      return button(`<span>${plantName(plant)} #${plant.id}<small>${plantDetail(plant)} · ${percent(plant.size)}% mature</small></span>
         <span class="goal-reward">${coins(payout)}</span>`, "deliver-order", {
-        className: "delivery-option", extra: `data-id="${order.id}" data-plant="${plant.id}" aria-label="Deliver ${species.name} number ${plant.id} for ${payout} coins"`,
+        className: "delivery-option", extra: `data-id="${order.id}" data-plant="${plant.id}" aria-label="Deliver ${plantName(plant)} number ${plant.id} for ${payout} coins"`,
       });
     }).join("");
     openDialog(orderTitles[order.slot], `<p>${orderRequirement(order)} The plant you deliver leaves your shelf.</p>
@@ -848,6 +958,39 @@
       case "select":
         if (state.plants.some(item => item.id === Number(id))) state.selected = Number(id);
         return;
+      case "favorite":
+        if (plant) plant.favorite = !plant.favorite;
+        return;
+      case "filter-favorites": {
+        view.favoritesOnly = !view.favoritesOnly;
+        const favorite = state.plants.find(item => item.favorite);
+        if (view.favoritesOnly && !plant?.favorite && favorite) state.selected = favorite.id;
+        return;
+      }
+      case "nickname":
+        if (plant) showNickname(plant);
+        return;
+      case "save-nickname": {
+        const renamed = state.plants.find(item => item.id === Number(id));
+        if (!G.renamePlant(state, renamed, data.nickname)) return;
+        dialog.close();
+        return renamed.nickname ? "Nickname saved." : "Nickname cleared.";
+      }
+      case "family":
+        showFamily(Number(id));
+        return;
+      case "repot":
+        if (plant) showRepot(plant, now);
+        return;
+      case "save-repot": {
+        const repotted = state.plants.find(item => item.id === Number(id));
+        if (!G.repotPlant(state, repotted, data.pot, data.soil)) {
+          updateRepot(now);
+          return "This repotting option is unavailable.";
+        }
+        dialog.close();
+        return `${plantName(repotted)} repotted.`;
+      }
       case "move":
         if (plant) showMove(plant, now);
         return;
@@ -932,7 +1075,7 @@
       }
       case "sell":
         if (!plant) return;
-        openDialog(`Sell ${SPECIES[plant.species].name}?`, `<p>This frees a shelf space. Its phenotype will stay in your Field Guide.</p>
+        openDialog(`Sell ${plantName(plant)}?`, `<p>This frees a shelf space. Its phenotype will stay in your Field Guide.</p>
           <div class="dialog-actions">${button("Cancel", "close")}${button(`Sell for ${coins(G.salePrice(plant))}`, "confirm-sell", {
             className: "primary", extra: `data-id="${plant.id}"`,
           })}</div>`);
@@ -1088,7 +1231,14 @@
     pruning = undefined;
     training = undefined;
   });
+  dialog.addEventListener("submit", event => {
+    const form = event.target.closest("[data-plant-form]");
+    if (!form) return;
+    event.preventDefault();
+    runAction(form.dataset.plantForm, { ...Object.fromEntries(new FormData(form)), id: form.dataset.id });
+  });
   dialog.addEventListener("change", event => {
+    if (event.target.closest('[data-plant-form="save-repot"]')) updateRepot(Date.now());
     if (!training || !event.target.matches("[data-training-branch]")) return;
     training.active = Number(event.target.value);
     updateTraining();
@@ -1161,8 +1311,10 @@
 
   function refresh() {
     syncSave();
-    advanceTo(Date.now());
-    if (!dialog.open && !draggedPlant) render();
+    const now = Date.now();
+    advanceTo(now);
+    if (dialog.open) updateRepot(now);
+    else if (!draggedPlant) render();
   }
 
   window.addEventListener("storage", event => { if (event.key === STORE) refresh(); });

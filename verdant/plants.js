@@ -435,8 +435,13 @@ window.PlantArt = (() => {
     { light: "#a1c2b5", color: "#618e84", rimShadow: "#416b63", shadow: "#244d48", rim: "#b7cfc1" },
   ];
 
-  function pot(ctx, tier) {
-    const glaze = potteryGlazes[tier];
+  const customPottery = {
+    terracotta: { width: .93, height: 1.03, glaze: { light: "#e5a079", color: "#be6948", rimShadow: "#9e452f", shadow: "#6c3529", rim: "#efa37c" } },
+    ceramic: { width: 1.04, height: .92, glaze: { light: "#94b9c7", color: "#4e849d", rimShadow: "#34627c", shadow: "#233d59", rim: "#b1cbd0" } },
+    shallow: { width: 1.28, height: .53, glaze: { light: "#d4c6ad", color: "#ad9679", rimShadow: "#80715b", shadow: "#554c40", rim: "#e0d1ae" } },
+  };
+
+  function pot(ctx, tier, glaze) {
     ctx.save();
     const shadow = ctx.createRadialGradient(0, 62, 6, 0, 62, 86);
     shadow.addColorStop(0, "rgba(46,35,22,.37)");
@@ -549,8 +554,10 @@ window.PlantArt = (() => {
     ctx.scale(unit, unit);
     ctx.translate(170, 229);
     ctx.save();
-    if (species.shape === "tree") ctx.scale(1.17, .58);
-    pot(ctx, species.tier);
+    const pottery = Object.hasOwn(customPottery, canvas.dataset.pot) ? customPottery[canvas.dataset.pot] : null;
+    if (pottery) ctx.scale(pottery.width, pottery.height);
+    else if (species.shape === "tree") ctx.scale(1.17, .58);
+    pot(ctx, species.tier, pottery?.glaze ?? potteryGlazes[species.tier]);
     ctx.restore();
     const scale = (.72 + plant.size * .004) * (Number(canvas.dataset.form) || 1);
     const leafScale = Number(canvas.dataset.leaf) || 1;
