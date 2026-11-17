@@ -222,7 +222,10 @@ nav a[aria-current] { color: #264f37; background: #e4ecdd; box-shadow: inset 0 0
 .station-heading .tile-icon { width: 35px; height: 35px; color: var(--station-ink); background: #fffef6bc; }
 .station-heading h3 { font-size: 22px; }
 .station-heading p { color: var(--muted); font-size: .73rem; }
-.station-recommended { margin-left: auto; color: #315941; background: #eef5e7; }
+.station-badges { display: grid; justify-items: end; gap: 4px; margin-left: auto; }
+.station-recommended { color: #315941; background: #eef5e7; }
+.lamp-capacity { color: #235853; background: #eef8f4; }
+.lamp-capacity.lamp-full { color: #795723; background: #fff1d7; }
 .station-pots {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 152px), 1fr)); gap: 6px; align-content: start;
   flex: 1; min-height: 83px; padding: 9px;
@@ -235,6 +238,7 @@ nav a[aria-current] { color: #264f37; background: #e4ecdd; box-shadow: inset 0 0
 .station-pots .shelf-preview { width: 51px; height: 49px; }
 .station-pots .shelf-plant.is-dragged { opacity: .48; }
 .station.drop-target { border-color: #7c9d7e; outline: 2px solid #7c9d7e; outline-offset: 1px; }
+.station.drop-blocked { border-color: #b18358; outline: 2px solid #b18358; outline-offset: 1px; }
 .station-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px; padding: 8px 10px; }
 .station-footer > small { color: var(--muted); font-size: .72rem; }
 .station-footer > small svg { color: #508183; }

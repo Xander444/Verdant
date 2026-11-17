@@ -10,6 +10,8 @@ window.Garden = (() => {
   const INHERITED_TRAIT_CHANCE = .62;
   const FAVOR_WEIGHT = .80;
   const STARTING_DISPLAY_SPOTS = 2;
+  const STARTING_SHELF_SPACE = 4;
+  const MAX_SHELF_UPGRADES = 50;
   const RARITIES = ["Common", "Uncommon", "Rare", "Legendary"];
   const PHASES = [
     { name: "Night", icon: "moon", until: 6, evaporation: .57, growth: .36 },
@@ -19,12 +21,16 @@ window.Garden = (() => {
     { name: "Night", icon: "moon", until: 24, evaporation: .57, growth: .36 },
   ];
   const LOCATIONS = ["Shade", "Window", "Grow lamp"];
+  const GROW_LAMP = 2;
+  const GROW_LAMP_SLOTS = 2;
+  const FULL_LAMP = { growth: 1.6, drying: 1.65 };
+  const DIMMED_LAMP = { growth: 1.35, drying: 1.3 };
   const TREE_BRANCHES = ["Lower left", "Lower right", "Middle left", "Upper right", "Crown"];
   const BRANCH_LIMIT = 24;
   const STATION_UPGRADES = {
     tray: { name: "Humidity tray", cost: 24, stations: [0, 1, 2], description: "Plants here lose humidity 65% more slowly." },
     curtain: { name: "Shade curtain", cost: 38, stations: [1], description: "Filters afternoon sun for shade-loving plants and slows soil drying." },
-    timer: { name: "Lamp timer", cost: 46, stations: [2], description: "Dims the lamp to window-light levels during the day and slows soil drying." },
+    timer: { name: "Lamp timer", cost: 46, stations: [GROW_LAMP], description: "Dims the lamp during the day. Growth and drying are gentler, and afternoon shade-lovers can use it." },
   };
   const POT_STYLES = {
     original: { name: "Original pot", cost: 0 },
@@ -144,15 +150,36 @@ window.Garden = (() => {
 
   function lightTarget(species, now) {
     const phase = phaseAt(now).name;
-    if (phase === "Night") return species.tier >= 2 ? 2 : 0;
+    if (phase === "Night") return species.tier >= 2 ? GROW_LAMP : 0;
     if (phase === "Afternoon" && ["fern", "shield", "heart", "flower"].includes(species.shape)) return 0;
     return 1;
+  }
+
+  function lampPlantCount(state) {
+    return state.plants.filter(plant => plant.location === GROW_LAMP).length;
+  }
+
+  function stationHasRoom(state, location) {
+    return location !== GROW_LAMP || (state != null && lampPlantCount(state) < GROW_LAMP_SLOTS);
+  }
+
+  function enforceLampLimit(state) {
+    let occupied = 0;
+    for (const plant of state.plants) {
+      if (plant.location !== GROW_LAMP) continue;
+      occupied++;
+      if (occupied > GROW_LAMP_SLOTS) plant.location = 1;
+    }
   }
 
   function makePlant(state, speciesId, pheno, now, source, traits) {
     const species = SPECIES[speciesId];
     const starter = source === "starter";
     const seedling = source === "seedling";
+    const target = starter
+      ? LOCATIONS.findIndex((_, spot) => !lightWorks({ species: speciesId }, now, spot, state))
+      : lightTarget(species, now);
+    const location = stationHasRoom(state, target) ? target : 1;
     return {
       id: state.nextId++, species: speciesId, pheno,
       traits: traits ? { ...traits } : { stature: Math.round(Math.random() * 100), leafSize: Math.round(Math.random() * 100) },
@@ -161,7 +188,7 @@ window.Garden = (() => {
       humidity: starter ? 50 : 68,
       nutrients: starter ? 31 : seedling ? 65 : 59,
       size: starter ? 37 : seedling ? 8 : 36,
-      quality: 0, location: starter ? (lightTarget(species, now) + 1) % LOCATIONS.length : lightTarget(species, now),
+      quality: 0, location,
       fedAt: null, mistedAt: null, tonicAt: null, prunedAt: null, bredUntil: 0, onDisplay: false,
     };
   }
@@ -173,7 +200,7 @@ window.Garden = (() => {
 
   function fresh(now) {
     const state = {
-      version: 1, updatedAt: now, coins: 36, displayBank: 0, displaySpots: STARTING_DISPLAY_SPOTS, capacity: 4,
+      version: 1, updatedAt: now, coins: 36, displayBank: 0, displaySpots: STARTING_DISPLAY_SPOTS, capacity: STARTING_SHELF_SPACE, shelfUpgrades: 0,
       nextId: 1, inventory: { fertilizer: 2, tonic: 0 }, plants: [], seeds: [], discovered: [],
       history: { recovered: false, bought: false, harvested: false, rareCross: false },
       claimed: [], selected: 1, journal: [],
@@ -316,26 +343,31 @@ window.Garden = (() => {
     return location === 1 && hasUpgrade(state, location, "curtain") && phaseAt(now).name === "Afternoon";
   }
 
-  function lampDimmed(now, location, state) {
-    return location === 2 && hasUpgrade(state, location, "timer") && phaseAt(now).name !== "Night";
+  function lampDimmed(now, state) {
+    return hasUpgrade(state, GROW_LAMP, "timer") && phaseAt(now).name !== "Night";
+  }
+
+  function growLampEffects(now, state) {
+    return lampDimmed(now, state) ? DIMMED_LAMP : FULL_LAMP;
   }
 
   function lightWorks(plant, now, location = plant.location, state) {
     const ideal = lightTarget(SPECIES[plant.species], now);
     return location === ideal ||
       (ideal === 0 && curtainClosed(now, location, state)) ||
-      (ideal === 1 && lampDimmed(now, location, state));
+      (location === GROW_LAMP && (ideal === 1 || lampDimmed(now, state)));
   }
 
   function dryingRate(plant, now, location = plant.location, state) {
     const species = SPECIES[plant.species];
     const shapeFactor = species.shape === "succulent" ? .57 : species.shape === "fern" ? 1.21 : 1;
-    const locationFactor = curtainClosed(now, location, state) ? .84 : lampDimmed(now, location, state) ? 1 : [.84, 1, 1.17][location];
+    const locationFactor = location === GROW_LAMP ? growLampEffects(now, state).drying :
+      location === 0 || curtainClosed(now, location, state) ? .84 : 1;
     return [1.35, 1.85, 2.55, 3.35][species.tier] * phaseAt(now).evaporation * shapeFactor * locationFactor * SOIL_MIXES[soilMix(plant)].drying;
   }
 
   function movePlant(plant, location, now, state) {
-    if (!LOCATIONS[location] || plant.location === location) return false;
+    if (!LOCATIONS[location] || plant.location === location || !stationHasRoom(state, location)) return false;
     const correctLight = lightWorks(plant, now, location, state);
     const wasCorrect = lightWorks(plant, now, plant.location, state);
     plant.location = location;
@@ -426,8 +458,9 @@ window.Garden = (() => {
         const change = stress ? -stress * (1 + tier * .14) : (plant.health < 90 ? 2.65 : .65);
         const health = clamp(plant.health + change * hours / 2, 10);
         if (plant.onDisplay) state.displayBank += displayRate({ ...plant, health }) * hours;
+        const growthFactor = stress ? .23 : plant.location === GROW_LAMP ? growLampEffects(cursor, state).growth : 1;
         const grow = health >= 60
-          ? (stress ? .23 : 1) * phase.growth * (1 + nutrients / 160) * (1 + .10 * plant.quality) / (1 + .16 * tier)
+          ? growthFactor * phase.growth * (1 + nutrients / 160) * (1 + .10 * plant.quality) / (1 + .16 * tier)
           : 0;
         plant.water = clamp(plant.water - waterLoss * hours);
         plant.humidity = clamp(plant.humidity - humidityLoss * hours);
@@ -441,8 +474,26 @@ window.Garden = (() => {
     state.updatedAt = now;
   }
 
+  function upgradeSavedShelves(state) {
+    if (Number.isInteger(state.shelfUpgrades)) return;
+    // Before doubling, every purchase added two spaces.
+    const capacity = Number.isSafeInteger(state.capacity) ? state.capacity : STARTING_SHELF_SPACE;
+    const upgrades = Math.floor((capacity - STARTING_SHELF_SPACE) / 2);
+    state.shelfUpgrades = clamp(upgrades, 0, MAX_SHELF_UPGRADES);
+    state.capacity = STARTING_SHELF_SPACE * 2 ** state.shelfUpgrades;
+  }
+
   function shelfCost(state) {
-    return 28 + (state.capacity - 4) * 6;
+    return state.shelfUpgrades >= MAX_SHELF_UPGRADES ? null : 28 + 12 * state.shelfUpgrades;
+  }
+
+  function buyShelfUpgrade(state) {
+    const cost = shelfCost(state);
+    if (cost === null || state.coins < cost) return false;
+    state.coins -= cost;
+    state.shelfUpgrades++;
+    state.capacity *= 2;
+    return true;
   }
 
   function freeSlots(state) {
@@ -680,12 +731,12 @@ window.Garden = (() => {
   ];
 
   return {
-    MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES,
+    MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES, GROW_LAMP, GROW_LAMP_SLOTS,
     CATALOG, SPECIES, SUPPLIES, GOALS, POT_STYLES, SOIL_MIXES, clamp, traitsFor, traitScales,
     potStyle, soilMix, repotCost, repotPlant, renamePlant, familyFor,
-    phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, shelfCost, freeSlots,
+    phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, upgradeSavedShelves, shelfCost, buyShelfUpgrade, freeSlots,
     hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, displayCapacity, displaySpotCost, buyDisplaySpot,
-    enforceDisplayLimit, setDisplay,
+    enforceDisplayLimit, setDisplay, lampPlantCount, stationHasRoom, enforceLampLimit, growLampEffects,
     pruningReadyAt, canPrune, pruningCutCount, prunePlant,
     speciesUnlocked, marketStock, nextRestock, buyPlant, rotateOrders, nextOrderDay, orderMatches,
     toggleOrderPin, deliverOrder, parentProblem, crossPreview, breed, cuttingProblem, rootingTime, takeCutting, potSeed,

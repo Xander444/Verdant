@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const G = window.Garden;
-  const { SPECIES, CATALOG, RARITIES, LOCATIONS, GOALS, SUPPLIES, POT_STYLES, SOIL_MIXES, HOUR } = G;
+  const { SPECIES, CATALOG, RARITIES, LOCATIONS, GOALS, SUPPLIES, POT_STYLES, SOIL_MIXES, GROW_LAMP, GROW_LAMP_SLOTS, HOUR } = G;
   const STORE = "verdant-greenhouse-v1";
   const app = document.querySelector("#app");
   const dialog = document.querySelector("#dialog");
@@ -53,7 +53,7 @@
   const percent = value => Math.floor(value + .000001);
   const countSpecies = () => new Set(state.discovered.map(key => key.split(":")[0])).size;
   const stationIcons = ["leaf", "sun", "lamp"];
-  const stationNotes = ["Soft light, slower drying", "Light follows the day", "Steady light, faster drying"];
+  const stationNotes = ["Soft light, slower drying", "Light follows the day"];
   const totalPhenotypes = CATALOG.reduce((sum, species) => sum + species.phenotypes.length, 0);
   const escapeText = value => String(value).replace(/[&<>"']/g, character => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -99,7 +99,9 @@
           state.orders ??= null;
           state.stationUpgrades ??= [[], [], []];
           for (const plant of state.plants) plant.traits ??= G.traitsFor(plant);
+          G.upgradeSavedShelves(state);
           G.enforceDisplayLimit(state);
+          G.enforceLampLimit(state);
         }
       }
       lastSaved = raw;
@@ -189,6 +191,8 @@
     const sick = plant.health < 55;
     const waterMood = plant.water < needs.dry ? "warning" : plant.water > needs.wet ? "warning" : "blue";
     const lightGood = G.lightWorks(plant, now, plant.location, state);
+    const lightTip = lightGood ? "Right for now" : !G.stationHasRoom(state, needs.light) ? "Grow lamp is full" :
+      `Move to ${LOCATIONS[needs.light].toLowerCase()}`;
     const shallow = G.potStyle(plant) === "shallow" || (G.potStyle(plant) === "original" && species.shape === "tree");
     const stage = plant.size >= 83 ? "Mature" : plant.size >= 42 ? "Established" : plant.size >= 23 ? "Young plant" : "Seedling";
     const healthLabel = sick ? "Needs care" : plant.health < 72 ? "Recovering" : "Healthy";
@@ -213,7 +217,7 @@
           ${metric("Health", "heart", `${percent(plant.health)}%`, healthTip, plant.health < 72 ? "warning" : "", plant.health)}
           ${metric("Water", "drop", `${percent(plant.water)}%`, waterTip, waterMood, plant.water)}
           ${metric("Maturity", "sprout", `${percent(plant.size)}%`, plant.size >= 42 ? "Breeding maturity met" : "Breeding at 42%", "", plant.size)}
-          ${metric("Light", "sun", LOCATIONS[plant.location], lightGood ? "Right for now" : `Move to ${LOCATIONS[needs.light].toLowerCase()}`, lightGood ? "" : "warning")}
+          ${metric("Light", "sun", LOCATIONS[plant.location], lightTip, lightGood ? "" : "warning")}
           ${needs.humidity ? metric("Humidity", "mist", `${percent(plant.humidity)}%`, plant.humidity < needs.humidity ? "Needs misting" : "Humidity is good", plant.humidity < needs.humidity ? "warning" : "blue", plant.humidity) : ""}
           ${species.tier >= 1 ? metric("Nutrients", "fertilizer", `${percent(plant.nutrients)}%`, plant.nutrients < needs.food ? "Needs fertilizer" : "Nutrients are good", plant.nutrients < needs.food ? "warning" : "", plant.nutrients) : ""}
         </div>
@@ -280,21 +284,31 @@
         <span><strong>${plantName(item)}</strong><small>${plantDetail(item)}</small></span>
       </button>`;
     };
+    const lampCount = G.lampPlantCount(state);
+    const lampBoost = Math.round((G.growLampEffects(now, state).growth - 1) * 100);
     const stations = LOCATIONS.map((name, spot) => {
       const residents = state.plants.filter(item => item.location === spot && (!view.favoritesOnly || item.favorite))
         .sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)));
       const current = plant?.location === spot;
-      const recommended = plant && G.lightWorks(plant, now, spot, state);
+      const full = !G.stationHasRoom(state, spot);
+      const recommended = plant && (!full || current) && G.lightWorks(plant, now, spot, state);
+      const lamp = spot === GROW_LAMP;
+      const note = lamp ? `+${lampBoost}% growth with good care · Faster drying` : stationNotes[spot];
       const upgrades = Object.entries(G.STATION_UPGRADES).filter(([id]) => G.hasUpgrade(state, spot, id));
       return `<article class="paper station station-${spot}" data-station="${spot}">
         <div class="station-heading"><span class="tile-icon">${icon(stationIcons[spot])}</span>
-          <div><h3>${name}</h3><p>${stationNotes[spot]}</p></div>
-          ${recommended ? '<span class="count-pill station-recommended">Good light now</span>' : ""}</div>
+          <div><h3>${name}</h3><p>${note}</p></div>
+          <div class="station-badges">
+            ${lamp ? `<span class="count-pill lamp-capacity ${full ? "lamp-full" : ""}">${lampCount} / ${GROW_LAMP_SLOTS} spots</span>` : ""}
+            ${recommended ? '<span class="count-pill station-recommended">Good light now</span>' : ""}
+          </div>
+        </div>
         <div class="station-pots">${residents.length ? residents.map(plantTile).join("") :
           `<div class="station-empty">${icon("sprout")} ${view.favoritesOnly ? "No favorites here" : "Empty spot"}</div>`}</div>
         ${plant ? `<div class="station-footer"><small title="Current soil drying rate">${icon("drop")} ${dryingLabel(plant, now, spot)}</small>
-          ${button(current ? "Here now" : "Move here", "station-place", { className: "compact", disabled: current,
-            extra: `data-id="${spot}" data-plant="${plant.id}" aria-label="${current ? `${SPECIES[plant.species].name} is here` : `Move ${SPECIES[plant.species].name} to ${name.toLowerCase()}`}"`,
+          ${button(current ? "Here now" : full ? "Lamp is full" : "Move here", "station-place", { className: "compact", disabled: current || full,
+            extra: `data-id="${spot}" data-plant="${plant.id}" aria-label="${current ? `${plantName(plant)} is here` :
+              full ? "Grow lamp is full" : `Move ${plantName(plant)} to ${name.toLowerCase()}`}"`,
           })}</div>` : ""}
         <div class="station-upgrades">
           ${button("Upgrade shelf", "view-upgrades", { symbol: "plus", className: "text-button",
@@ -304,9 +318,9 @@
       </article>`;
     }).join("");
     const seeds = state.seeds.map(seed => `<a class="shelf-plant seed-slot" href="#breeding"><span class="shelf-placeholder">${icon("sprout")}</span><span><strong>${seed.readyAt <= now ? "Ready to pot" : seed.source === "cutting" ? "Rooting cutting" : "Seed tray"}</strong><small>Reserved space</small></span></a>`).join("");
-    const empty = slots > 0 ? `<a class="shelf-plant empty-slot" href="#market"><span class="shelf-placeholder">${icon("plus")}</span><span><strong>Add a plant</strong><small>${slots} open ${slots === 1 ? "space" : "spaces"}</small></span></a>` : "";
+    const empty = slots > 0 ? `<a class="shelf-plant empty-slot" href="#market"><span class="shelf-placeholder">${icon("plus")}</span><span><strong>Add a plant</strong><small>${numberFormat.format(slots)} open ${slots === 1 ? "space" : "spaces"}</small></span></a>` : "";
     return `<section class="shelf-section" aria-labelledby="shelf-title">
-      <div class="section-heading"><div class="heading-with-count"><h2 id="shelf-title">Your shelves</h2><span class="count-pill">${state.capacity - slots} / ${state.capacity} spaces</span></div>
+      <div class="section-heading"><div class="heading-with-count"><h2 id="shelf-title">Your shelves</h2><span class="count-pill">${numberFormat.format(state.capacity - slots)} / ${numberFormat.format(state.capacity)} spaces</span></div>
         <div class="shelf-tools">${button("Favorites", "filter-favorites", { symbol: "star", className: "compact favorite-button",
           extra: `aria-pressed="${view.favoritesOnly}"` })}<a class="text-link" href="#market">${icon("plus")} Expand shelves</a></div></div>
       ${plant ? `<p class="section-description shelf-hint"><strong>${plantName(plant)} selected.</strong> Drag a pot between shelves, or select a pot and choose Move here.</p>` : ""}
@@ -355,11 +369,15 @@
     const supplies = Object.entries(SUPPLIES).map(([id, item]) => `<article class="paper supply-card">
       <span class="tile-icon">${icon(item.icon)}</span><div><h3>${item.name}</h3><p>${item.description}</p><small>${state.inventory[id]} in stock</small></div>
       ${button(coins(item.cost), "buy-supply", { extra: `data-id="${id}" aria-label="Buy ${item.name} for ${item.cost} coins"`, disabled: state.coins < item.cost })}</article>`).join("");
-    return `${pageIntro("The Market", "Find a new plant, stock up on supplies, or expand your shelves.", "shop", `<span class="count-pill">${icon("shelf")} ${open} open ${open === 1 ? "space" : "spaces"}</span>`)}
+    return `${pageIntro("The Market", "Find a new plant, stock up on supplies, or expand your shelves.", "shop", `<span class="count-pill">${icon("shelf")} ${numberFormat.format(open)} open ${open === 1 ? "space" : "spaces"}</span>`)}
       <div class="supplies-grid">
         <article class="paper supply-card" id="shelf-upgrade"><span class="tile-icon">${icon("shelf")}</span>
-          <div><h3>Extra shelf space</h3><p>Add two spaces for plants or seedlings.</p><small>${state.capacity} total spaces</small></div>
-          ${button(coins(spaceCost), "expand", { extra: `aria-label="Buy two shelf spaces for ${spaceCost} coins"`, disabled: state.coins < spaceCost })}</article>
+          <div><h3>Extra shelf space</h3>
+            <p>${spaceCost === null ? "Maximum shelf space reached." : "Double the space for plants and seedlings."}</p>
+            <small>${numberFormat.format(state.capacity)}${spaceCost === null ? "" : ` → ${numberFormat.format(state.capacity * 2)}`} total spaces</small></div>
+          ${spaceCost === null ? "" : button(coins(spaceCost), "expand", {
+            extra: `aria-label="Double shelf space for ${spaceCost} coins"`, disabled: state.coins < spaceCost,
+          })}</article>
         <article class="paper supply-card"><span class="tile-icon">${icon("display")}</span>
           <div><h3>Display spot</h3><p>Earn coins from one more plant.</p><small>${G.displayCapacity(state)} total spots</small></div>
           ${button(coins(displayCost), "buy-display", { extra: `aria-label="Buy one display spot for ${displayCost} coins"`, disabled: state.coins < displayCost })}</article>
@@ -674,9 +692,12 @@
     const phase = G.phaseAt(now).name.toLowerCase();
     openDialog("Move plant", `<p>Choose a spot for the ${phase}. Light needs change over the day.</p>
       <div class="move-options">${LOCATIONS.map((spot, i) => {
-        const good = G.lightWorks(plant, now, i, state);
-        return button(`${spot}${good ? " <small>Recommended now</small>" : ""}${i === plant.location ? " <small>Current</small>" : ""}`, "place", {
-          symbol: stationIcons[i], extra: `data-id="${i}" data-plant="${plant.id}"`, disabled: i === plant.location,
+        const current = i === plant.location;
+        const full = !current && !G.stationHasRoom(state, i);
+        const good = !full && G.lightWorks(plant, now, i, state);
+        const status = current ? "Current" : full ? "Full" : good ? "Recommended now" : "";
+        return button(`${spot}${status ? ` <small>${status}</small>` : ""}`, "place", {
+          symbol: stationIcons[i], extra: `data-id="${i}" data-plant="${plant.id}"`, disabled: current || full,
           className: good ? "recommended" : "",
         });
       }).join("")}</div>`);
@@ -998,8 +1019,13 @@
       case "station-place": {
         const moved = state.plants.find(item => item.id === Number(data.plant));
         const spot = Number(id);
+        if (!moved || moved.location === spot) return;
+        if (!G.stationHasRoom(state, spot)) {
+          if (action === "place") showMove(moved, now);
+          return "The grow lamp is full. Move a plant off it to free a spot.";
+        }
+        if (!G.movePlant(moved, spot, now, state)) return;
         if (action === "place") dialog.close();
-        if (!moved || !G.movePlant(moved, spot, now, state)) return;
         state.selected = moved.id;
         return `${SPECIES[moved.species].name} moved to ${LOCATIONS[spot].toLowerCase()}.`;
       }
@@ -1097,11 +1123,8 @@
         return `Goal complete. You earned ${GOALS[index].reward} coins.`;
       }
       case "expand": {
-        const price = G.shelfCost(state);
-        if (state.coins < price) return;
-        state.coins -= price;
-        state.capacity += 2;
-        return "Two shelf spaces added.";
+        if (!G.buyShelfUpgrade(state)) return;
+        return `Shelf space doubled. You now have ${numberFormat.format(state.capacity)} spaces.`;
       }
       case "buy-display":
         if (!G.buyDisplaySpot(state)) return "You need more coins for a display spot.";
@@ -1253,7 +1276,7 @@
   function clearDrag() {
     if (!draggedPlant) return;
     draggedPlant.source.classList.remove("is-dragged");
-    draggedPlant.station?.classList.remove("drop-target");
+    draggedPlant.station?.classList.remove("drop-target", "drop-blocked");
     draggedPlant = undefined;
   }
 
@@ -1270,16 +1293,19 @@
     const station = event.target.closest("[data-station]");
     if (!draggedPlant || !station) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
+    const spot = Number(station.dataset.station);
+    const sourceSpot = Number(draggedPlant.source.closest("[data-station]").dataset.station);
+    const full = spot !== sourceSpot && !G.stationHasRoom(state, spot);
+    event.dataTransfer.dropEffect = full ? "none" : "move";
     if (draggedPlant.station === station) return;
-    draggedPlant.station?.classList.remove("drop-target");
+    draggedPlant.station?.classList.remove("drop-target", "drop-blocked");
     draggedPlant.station = station;
-    station.classList.add("drop-target");
+    station.classList.add(full ? "drop-blocked" : "drop-target");
   });
   app.addEventListener("dragleave", event => {
     const station = event.target.closest("[data-station]");
     if (!station || draggedPlant?.station !== station || station.contains(event.relatedTarget)) return;
-    station.classList.remove("drop-target");
+    station.classList.remove("drop-target", "drop-blocked");
     draggedPlant.station = undefined;
   });
   app.addEventListener("drop", event => {

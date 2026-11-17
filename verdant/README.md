@@ -12,7 +12,8 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 
 - Your starter is a sick Golden Pothos. Water its dry soil, move it to the recommended light, and prune it. Claim your goal reward when it reaches 72% health.
 - Move plants between the shade, window, and grow lamp. Drag a pot to another shelf, or select the pot and use **Move here**. Each shelf previews how quickly the selected plant's soil will dry there.
-- Use **Upgrade shelf** to install a humidity tray on any shelf, a shade curtain at the window, or a daylight dimmer for the grow lamp.
+- The **Grow lamp** has two spots. It gives plants that need window light during the day or grow-lamp light at night 60% faster growth when their care needs are met. Soil dries 65% faster than at an open window. If a previous save has more than two plants under the lamp, the extras move to the Window.
+- Use **Upgrade shelf** to install a humidity tray on any shelf, a shade curtain at the window, or a lamp timer. The timer dims the grow lamp during the day so afternoon shade-lovers can use it. While dimmed, growth is 35% faster with good care and soil dries 30% faster than at an open window.
 - Use the **Watering can** to hold and pour until the soil moisture reaches the green range. You can also aim for the same range with **Start pouring** and **Stop pouring** using a mouse, touch, or keyboard.
 - Open **Prune** and snip each leaf as it is marked. Choose **Finish pruning** once all the cuts are done. A pruning session takes two to seven snips as the plant grows.
 - On a woody plant, open **Train branches** to select and bend a branch. Save the shape to keep the new silhouette.
@@ -24,6 +25,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - When two plants of the same species have different phenotypes, you can favor one for the cross. The breeding journal remembers your choice.
 - Offspring inherit differences in appearance from their parents, and these differences affect sale value. Cuttings retain the parent's inherited appearance.
 - Plants with at least 83% maturity and 75% health can provide a cutting of the same phenotype. A cutting uses one nursery space and costs its parent 8 maturity points. It roots in 20 to 75 minutes, depending on rarity.
+- You start with four plant and seedling spaces. Each **Extra shelf space** upgrade doubles that total. Upgrades bought before doubling was introduced count automatically. One previous purchase gives you eight spaces and two give you sixteen.
 - You start with two display spots. The Market sells extra spots one at a time, starting at 50 coins and increasing by 30 coins with each purchase. Select **Swap onto display** to replace one when the display is full. Collect whole display coins in the greenhouse.
 - The device's local clock drives light, drying, growth, and germination. Plant care and display earnings catch up for up to seven days between visits. Progress saves in the browser you play in.
 
