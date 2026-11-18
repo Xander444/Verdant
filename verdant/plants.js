@@ -43,6 +43,7 @@ window.PlantArt = (() => {
     [/splash|brush|map|mosaic|painted/, "mottle"],
   ];
   const speciesPatterns = {
+    moonlotus: "veins", glassorchid: "veins", nightqueen: "veins", silverfern: "edge",
     golden: "mottle", velvet: "veins", polka: "spots", prayer: "veins", constellation: "spots",
     pink: "sector", satin: "mottle", snake: "bands", nerve: "veins", jewel: "veins",
   };
@@ -73,6 +74,13 @@ window.PlantArt = (() => {
     if (style === "maple") {
       for (const [x, y] of [[-.64, -.24], [-1, -.52], [-.45, -.47], [-.76, -.78], [-.23, -.67], [0, -1],
         [.24, -.7], [.7, -.8], [.49, -.47], [1, -.52], [.64, -.24]]) ctx.lineTo(x * width + bow * -y, y * length);
+    } else if (style === "lotus") {
+      ctx.bezierCurveTo(-width * 1.13, -length * .07, -width * 1.2, -length * .74, -width * .38, -length * .93);
+      ctx.bezierCurveTo(-width * .12, -length * 1.03, width * .19 + bow, -length * 1.03, width * .46 + bow, -length * .89);
+      ctx.bezierCurveTo(width * 1.26, -length * .63, width * 1.08, -length * .04, 0, 0);
+    } else if (style === "orchid") {
+      ctx.bezierCurveTo(-width * .76, -length * .08, -width * 1.4, -length * .77, bow, -length);
+      ctx.bezierCurveTo(width * 1.38, -length * .81, width * .78, -length * .12, 0, 0);
     } else if (style === "grass" || style === "spear") {
       ctx.bezierCurveTo(-width * .63, -length * .3, bow - width * .88, -length * .68, bow * 2.3, -length);
       ctx.bezierCurveTo(bow + width * 1.57, -length * .65, width * .74, -length * .22, 0, 0);
@@ -223,6 +231,8 @@ window.PlantArt = (() => {
   }
 
   const treeForms = {
+    embermaple: { spread: 1.15, height: 1.04, lean: -20, length: 34, width: .51, leaves: 10, style: "maple" },
+    dawnwood: { spread: 1.19, height: .91, lean: 18, length: 29, width: .37, leaves: 13, style: "bush" },
     ficus: { spread: .96, height: .94, lean: 9, length: 35, width: .32, leaves: 8, style: "bush" },
     umbrella: { spread: .82, height: 1.06, lean: -8, length: 40, width: .28, leaves: 6, style: "succulent" },
     elm: { spread: .94, height: .99, lean: 16, length: 27, width: .31, leaves: 11, style: "bush" },
@@ -342,8 +352,14 @@ window.PlantArt = (() => {
     black: [3, [84, 49, 65], 130, 15],
     wax: [5, [226, 128, 146], 111, 10],
     strawberry: [4, [235, 222, 194], 107, 8],
+    moonlotus: [3, [244, 233, 206], 127, 15],
+    glassorchid: [4, [222, 235, 224], 142, 13],
   };
   const speciesHabits = {
+    moonlotus: { count: 5, width: 86, height: 72, lift: 29, length: 52, blade: .58, angle: 1.1, sides: [], style: "lotus" },
+    glassorchid: { count: 5, width: 58, height: 35, lift: 26, length: 67, blade: .28, angle: 1.32, sides: [], style: "orchid" },
+    silverfern: { count: 8, width: 91, height: 122, lift: 44, drape: 70 },
+    nightqueen: { count: 5, width: 71, height: 87, lift: 45, length: 88, blade: .31, angle: .86 },
     jade: { width: 49, height: 84, lift: 42, length: 34, angle: .8 },
     peperomia: { count: 6, width: 78, height: 60, lift: 35, length: 44, blade: .41 },
     swedish: { height: 57, drape: 69, width: 108, length: 47, angle: 1.68 },
@@ -366,6 +382,46 @@ window.PlantArt = (() => {
       ellipse(ctx, 0, -radius * .52, radius * .33, radius * .61, petals);
     }
     ellipse(ctx, 0, 0, radius * .25, radius * .24, "#dabe73");
+    ctx.restore();
+  }
+
+  function lotusHead(ctx, x, y, radius, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    for (const [petals, length, offset] of [[9, 1, 0], [7, .73, .25]]) {
+      for (let i = 0; i < petals; i++) {
+        ctx.save();
+        ctx.rotate(offset + i / petals * Math.PI * 2);
+        const gradient = ctx.createLinearGradient(0, 0, 0, -radius * length);
+        gradient.addColorStop(0, rgb(mix(color, [192, 168, 130], .38)));
+        gradient.addColorStop(.55, rgb(color));
+        gradient.addColorStop(1, "#fff8e6");
+        ellipse(ctx, 0, -radius * length * .48, radius * .24, radius * length * .72, gradient);
+        ctx.restore();
+      }
+    }
+    ellipse(ctx, 0, 0, radius * .23, radius * .22, "#d4ac5d");
+    ctx.restore();
+  }
+
+  function orchidHead(ctx, x, y, radius, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    const shade = ctx.createLinearGradient(-radius, -radius, radius, radius);
+    shade.addColorStop(0, "#fffbed");
+    shade.addColorStop(.53, rgb(color));
+    shade.addColorStop(1, rgb(mix(color, [137, 116, 144], .43)));
+    for (const [angle, width, length] of [[-.95, .57, .78], [.95, .57, .78], [0, .3, .88], [-2.1, .22, .7], [2.1, .22, .7]]) {
+      ctx.save();
+      ctx.rotate(angle);
+      ellipse(ctx, 0, -radius * .48, radius * width, radius * length, shade);
+      ctx.strokeStyle = "rgba(121,105,135,.42)";
+      ctx.lineWidth = .65;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ellipse(ctx, 0, radius * .2, radius * .28, radius * .36, "#bb839b");
+    ellipse(ctx, 0, 0, radius * .12, radius * .13, "#e8cf85");
     ctx.restore();
   }
 
@@ -442,7 +498,7 @@ window.PlantArt = (() => {
       }
 
       const length = habit.length * scale;
-      const leafStyle = species.id === "purple" ? "triangle" : shape;
+      const leafStyle = habit.style ?? (species.id === "purple" ? "triangle" : shape);
       const tilt = along * habit.angle + turn;
       drawLeaf(ctx, reach, endY, tilt, length, length * habit.blade, leafStyle, palette, leafBrush());
       for (let i = 0; i < habit.sides.length; i++) {
@@ -462,8 +518,11 @@ window.PlantArt = (() => {
         const x = spread * 108 + (blossomRandom() - .5) * 18;
         const y = -(height + blossomRandom() * 18 - Math.abs(spread) * 26);
         stem(ctx, spread * 13, 0, x, y, x * .19, stemInk, 1.2);
-        flowerHead(ctx, x, y, size * (.75 + blossomRandom() * .42), mix(color, palette.accent, plant.pheno * .045),
-          species.id === "black" ? 4 : 5, blossomRandom);
+        const radius = size * (.75 + blossomRandom() * .42);
+        const petals = mix(color, palette.accent, plant.pheno * .045);
+        if (species.id === "moonlotus") lotusHead(ctx, x, y, radius, petals);
+        else if (species.id === "glassorchid") orchidHead(ctx, x, y, radius, petals);
+        else flowerHead(ctx, x, y, radius, petals, species.id === "black" ? 4 : 5, blossomRandom);
       }
     }
   }
@@ -473,6 +532,7 @@ window.PlantArt = (() => {
     { light: "#cfccad", color: "#a2a184", rimShadow: "#797b5d", shadow: "#4f5844", rim: "#e2ddbc" },
     { light: "#bcb4c8", color: "#95889e", rimShadow: "#766879", shadow: "#4c3f51", rim: "#d8ccd7" },
     { light: "#a1c2b5", color: "#618e84", rimShadow: "#416b63", shadow: "#244d48", rim: "#b7cfc1" },
+    { light: "#c4b88d", color: "#8f8055", rimShadow: "#6e633e", shadow: "#3c4938", rim: "#e5d4a5" },
   ];
 
   const customPottery = {

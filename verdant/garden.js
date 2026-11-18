@@ -12,7 +12,7 @@ window.Garden = (() => {
   const STARTING_DISPLAY_SPOTS = 2;
   const STARTING_SHELF_SPACE = 4;
   const MAX_SHELF_UPGRADES = 50;
-  const RARITIES = ["Common", "Uncommon", "Rare", "Legendary"];
+  const RARITIES = ["Common", "Uncommon", "Rare", "Legendary", "Mythic"];
   const PHASES = [
     { name: "Night", icon: "moon", until: 6, evaporation: .57, growth: .36 },
     { name: "Morning", icon: "sun", until: 11, evaporation: .9, growth: 1.18 },
@@ -46,7 +46,7 @@ window.Garden = (() => {
   const potStyle = plant => Object.hasOwn(POT_STYLES, plant.pot) ? plant.pot : "original";
   const soilMix = plant => Object.hasOwn(SOIL_MIXES, plant.soil) ? plant.soil : "standard";
   const CLASSIC_GROUP_SIZE = 5;
-  const CLASSIC_SPECIES_COUNT = RARITIES.length * CLASSIC_GROUP_SIZE;
+  const CLASSIC_SPECIES_COUNT = 4 * CLASSIC_GROUP_SIZE;
   const WOODY_GROUP_START = 8;
   const MARKET_PRICES = [
     [13, 16, 17, 19, 21, 17, 20, 22, 24, 21],
@@ -103,10 +103,20 @@ window.Garden = (() => {
       ["wisteria", "Wisteria Bonsai", "tree", "#8175a0", ["Lilac Cascade", "White Rain", "Violet Silk", "Blush Cascade", "Midnight Grape", "Blue Veil", "Pearl Lilac"], "Pendant clusters hang beneath a spreading crown."],
       ["juniper", "Moonlight Juniper", "tree", "#62877c", ["Moon Silver", "Blue Needle", "Winter Jade", "Silver Cloud", "Gold Mist", "Frost Tip", "Deep Pine", "Ghost Teal"], "Silvery needles gather in small clouds above an angled trunk."],
     ],
+    [
+      ["moonlotus", "Moonveil Lotus", "flower", "#718f80", ["Ivory Moon", "Rose Mist", "Blue Hour", "Jade Cup", "Silver Halo", "Golden Dawn"], "Round, veined leaves rise beneath layered ivory blossoms."],
+      ["embermaple", "Emberheart Maple", "tree", "#a56649", ["Crimson Ember", "Copper Glow", "Golden Ash", "Rose Flame", "Spring Cinder", "Silver Ember"], "Fine branches carry star-shaped leaves with warm copper margins."],
+      ["silverfern", "Starlace Fern", "fern", "#79a093", ["Moonlit Lace", "Blue Frost", "Gold Filigree", "Rose Tip", "Ivory Frond", "Deep Teal"], "Arching fronds unfurl into exceptionally fine, silver-edged leaflets."],
+      ["glassorchid", "Glasswing Orchid", "flower", "#658b80", ["Pearl Wing", "Amethyst Vein", "Blush Glass", "Amber Wing", "Silver Moth", "Sea Opal"], "Pale, moth-shaped flowers float above leathery green leaves."],
+      ["dawnwood", "Dawnwood Bonsai", "tree", "#718850", ["Spring Gold", "Ivory Grove", "Copper Dawn", "Emerald Crown", "Silver Bark", "Rose Canopy"], "A broad, aged trunk supports small leaves on a spreading crown."],
+      ["nightqueen", "Midnight Crown", "shield", "#334e55", ["Obsidian Crown", "Silver Sigil", "Ruby Vein", "Moon Jade", "Gold Crown", "Violet Velvet"], "Long velvet leaves carry a pale branching network of veins."],
+    ],
   ].map((entries, tier) => entries.map(([id, name, shape, color, phenotypes, note], position) => ({
-    id, name, shape, color, phenotypes, note, tier, position, price: MARKET_PRICES[tier][position],
+    id, name, shape, color, phenotypes, note, tier, position, price: MARKET_PRICES[tier]?.[position] ?? null,
   })));
   const CATALOG = GROUPS.flat();
+  const STANDARD_CATALOG = CATALOG.filter(species => species.tier < 4);
+  const MYTHIC_SPECIES = CATALOG.filter(species => species.tier === 4);
   const SPECIES = Object.fromEntries(CATALOG.map(species => [species.id, species]));
   const SUPPLIES = {
     fertilizer: { name: "Fertilizer", icon: "fertilizer", cost: 12, quantity: 3, description: "3 doses that support healthy growth." },
@@ -155,12 +165,16 @@ window.Garden = (() => {
     return 1;
   }
 
+  function growLampCapacity(state) {
+    return GROW_LAMP_SLOTS + (state?.lampExtensions ?? 0);
+  }
+
   function lampPlantCount(state) {
     return state.plants.filter(plant => plant.location === GROW_LAMP).length;
   }
 
   function stationHasRoom(state, location) {
-    return location !== GROW_LAMP || (state != null && lampPlantCount(state) < GROW_LAMP_SLOTS);
+    return location !== GROW_LAMP || (state != null && lampPlantCount(state) < growLampCapacity(state));
   }
 
   function enforceLampLimit(state) {
@@ -168,7 +182,7 @@ window.Garden = (() => {
     for (const plant of state.plants) {
       if (plant.location !== GROW_LAMP) continue;
       occupied++;
-      if (occupied > GROW_LAMP_SLOTS) plant.location = 1;
+      if (occupied > growLampCapacity(state)) plant.location = 1;
     }
   }
 
@@ -200,6 +214,8 @@ window.Garden = (() => {
 
   function initializeProgression(state) {
     state.automation ??= {};
+    state.mythicClaims ??= [];
+    state.lampExtensions ??= 0;
     state.promotionLevel ??= 0;
     state.quests ??= { claimed: [] };
     state.exhibitions ??= {};
@@ -273,7 +289,7 @@ window.Garden = (() => {
 
   function displayRate(plant, state) {
     const tier = SPECIES[plant.species].tier;
-    return [.38, .86, 1.84, 3.5][tier] *
+    return [.38, .86, 1.84, 3.5, 9][tier] *
       (1 + (plant.size / 60) ** 2 + plant.quality * .52) *
       (.38 + .62 * plant.health / 100) * (1 + plant.pheno * .055) * displayMultiplier(state);
   }
@@ -329,7 +345,7 @@ window.Garden = (() => {
     const tier = SPECIES[plant.species].tier;
     const { stature, leafSize } = traitsFor(plant);
     const specimenValue = 1 + stature * .0045 + leafSize * .003;
-    return Math.max(2, Math.round([7, 18, 44, 105][tier] *
+    return Math.max(2, Math.round([7, 18, 44, 105, 420][tier] *
       (.5 + 3.1 * (plant.size / 100) ** 2 + .38 * plant.quality) *
       (.38 + .62 * plant.health / 100) * (1 + plant.pheno * .09) * specimenValue));
   }
@@ -337,10 +353,10 @@ window.Garden = (() => {
   function careNeeds(plant, now) {
     const species = SPECIES[plant.species];
     return {
-      dry: [35, 41, 47, 53][species.tier] + (species.shape === "succulent" ? -8 : species.shape === "fern" ? 5 : 0),
+      dry: [35, 41, 47, 53, 61][species.tier] + (species.shape === "succulent" ? -8 : species.shape === "fern" ? 5 : 0),
       wet: species.shape === "succulent" ? 76 : 86,
-      humidity: Math.max(species.tier >= 2 ? [0, 0, 49, 61][species.tier] : 0, species.shape === "fern" ? 38 : 0),
-      food: [12, 22, 31, 42][species.tier],
+      humidity: Math.max(species.tier >= 2 ? [0, 0, 49, 61, 72][species.tier] : 0, species.shape === "fern" ? 38 : 0),
+      food: [12, 22, 31, 42, 53][species.tier],
       light: lightTarget(species, now),
     };
   }
@@ -381,7 +397,7 @@ window.Garden = (() => {
     const shapeFactor = species.shape === "succulent" ? .57 : species.shape === "fern" ? 1.21 : 1;
     const locationFactor = location === GROW_LAMP ? growLampEffects(now, state).drying :
       location === 0 || curtainClosed(now, location, state) ? .84 : 1;
-    return [1.35, 1.85, 2.55, 3.35][species.tier] * phaseAt(now).evaporation * shapeFactor * locationFactor * SOIL_MIXES[soilMix(plant)].drying;
+    return [1.35, 1.85, 2.55, 3.35, 4.45][species.tier] * phaseAt(now).evaporation * shapeFactor * locationFactor * SOIL_MIXES[soilMix(plant)].drying;
   }
 
   function movePlant(plant, location, now, state) {
@@ -465,16 +481,16 @@ window.Garden = (() => {
         const needs = careNeeds(plant, cursor);
         const waterLoss = dryingRate(plant, cursor, plant.location, state);
         const water = clamp(plant.water - waterLoss * hours / 2);
-        const humidityLoss = [.6, 1.35, 2.3, 3.4][tier] * phase.evaporation *
+        const humidityLoss = [.6, 1.35, 2.3, 3.4, 4.1][tier] * phase.evaporation *
           (hasUpgrade(state, plant.location, "tray") ? .35 : 1);
         const humidity = clamp(plant.humidity - humidityLoss * hours / 2);
-        const nutrientLoss = [.40, .66, .92, 1.29][tier];
+        const nutrientLoss = [.40, .66, .92, 1.29, 1.65][tier];
         const nutrients = clamp(plant.nutrients - nutrientLoss * hours / 2);
         const stress = (water < needs.dry ? .64 + (needs.dry - water) * .047 : 0) +
           (water > needs.wet ? .43 + (water - needs.wet) * .07 : 0) +
           (humidity < needs.humidity ? .4 + (needs.humidity - humidity) * .03 : 0) +
           (nutrients < needs.food ? .22 + tier * .14 : 0) +
-          (lightWorks(plant, cursor, plant.location, state) ? 0 : [.16, .42, .75, 1.18][tier]);
+          (lightWorks(plant, cursor, plant.location, state) ? 0 : [.16, .42, .75, 1.18, 1.65][tier]);
         const change = stress ? -stress * (1 + tier * .14) : (plant.health < 90 ? 2.65 : .65);
         const health = clamp(plant.health + change * hours / 2, 10);
         if (plant.onDisplay) {
@@ -539,6 +555,7 @@ window.Garden = (() => {
   }
 
   function marketStock(state, species, now) {
+    if (species.tier === 4) return 0;
     const window = marketWindow(state, now);
     if (species.tier === 0) {
       if (species.id === "golden") return Infinity;
@@ -668,16 +685,30 @@ window.Garden = (() => {
   }
 
   function parentProblem(plant, now) {
-    if (plant.size < 42) return "Needs 42% maturity";
-    if (plant.health < 72) return "Needs 72% health";
+    const mythic = SPECIES[plant.species].tier === 4;
+    const maturity = mythic ? 75 : 42;
+    const health = mythic ? 90 : 72;
+    if (plant.size < maturity) return "Needs " + maturity + "% maturity";
+    if (plant.health < health) return "Needs " + health + "% health";
     if (plant.bredUntil > now) return "Recovering after breeding";
+    return "";
+  }
+
+  function crossCost(a, b) {
+    return [a, b].some(plant => plant && SPECIES[plant.species].tier === 4) ? 100 : CROSS_COST;
+  }
+
+  function crossProblem(a, b) {
+    if (a && b && crossCost(a, b) > CROSS_COST && a.species !== b.species) {
+      return "Mythic plants need a partner of the same species.";
+    }
     return "";
   }
 
   function crossPreview(a, b) {
     const x = SPECIES[a.species];
     const y = SPECIES[b.species];
-    if (x.id === y.id || x.tier !== y.tier || x.tier === 3) return null;
+    if (x.id === y.id || x.tier !== y.tier || x.tier >= 3) return null;
     const [low, high] = [x.position, y.position].sort((l, r) => l - r);
     const group = GROUPS[x.tier + 1];
     const variety = low + 2 * high - 1;
@@ -733,8 +764,8 @@ window.Garden = (() => {
   }
 
   function breed(state, a, b, now, random = Math.random, requestedId = null) {
-    if (!a || !b || a.id === b.id || freeSlots(state) < 1 || state.coins < CROSS_COST ||
-        parentProblem(a, now) || parentProblem(b, now)) return null;
+    if (!a || !b || a.id === b.id || freeSlots(state) < 1 || state.coins < crossCost(a, b) ||
+        crossProblem(a, b) || parentProblem(a, now) || parentProblem(b, now)) return null;
     const target = crossPreview(a, b);
     const chance = random();
     const favoredParentId = favoredTraitParent(a, b, requestedId);
@@ -745,29 +776,37 @@ window.Garden = (() => {
     const pheno = chosen && random() < INHERITED_TRAIT_CHANCE
       ? chosen.pheno
       : Math.floor(random() * species.phenotypes.length);
-    const duration = [4, 6, 10, 16][species.tier] * MINUTE;
+    const duration = [4, 6, 10, 16, 90][species.tier] * MINUTE;
     const parents = [a, b].map(portrait);
     const traits = inheritTraits(a, b, random);
     const seed = { id: state.nextId++, species: species.id, pheno, readyAt: now + duration, parents, favoredParentId, traits };
     state.seeds.push(seed);
-    state.coins -= CROSS_COST;
-    a.bredUntil = b.bredUntil = now + duration + 3 * MINUTE;
+    state.coins -= crossCost(a, b);
+    const recovery = species.tier === 4 ? 6 * HOUR : 3 * MINUTE;
+    a.bredUntil = b.bredUntil = now + duration + recovery;
     return seed;
   }
 
+  function cuttingCost(plant) {
+    return SPECIES[plant.species].tier === 4 ? 125 : 0;
+  }
+
   function cuttingProblem(plant, now) {
-    if (plant.size < 83) return "Needs 83% maturity";
-    if (plant.health < 75) return "Needs 75% health";
+    const mythic = SPECIES[plant.species].tier === 4;
+    const maturity = mythic ? 96 : 83;
+    const health = mythic ? 92 : 75;
+    if (plant.size < maturity) return "Needs " + maturity + "% maturity";
+    if (plant.health < health) return "Needs " + health + "% health";
     if ((plant.cutUntil || 0) > now) return "Recovering from its last cutting";
     return "";
   }
 
   function rootingTime(plant) {
-    return [20, 35, 55, 75][SPECIES[plant.species].tier] * MINUTE;
+    return [20, 35, 55, 75, 360][SPECIES[plant.species].tier] * MINUTE;
   }
 
   function takeCutting(state, plant, now) {
-    if (!state.plants.includes(plant) || freeSlots(state) < 1 || cuttingProblem(plant, now)) return null;
+    if (!state.plants.includes(plant) || freeSlots(state) < 1 || cuttingProblem(plant, now) || state.coins < cuttingCost(plant)) return null;
     const { species, pheno } = plant;
     const cutting = {
       id: state.nextId++, species, pheno, readyAt: now + rootingTime(plant),
@@ -775,7 +814,8 @@ window.Garden = (() => {
     };
     state.seeds.push(cutting);
     plant.size -= 8;
-    plant.cutUntil = now + 12 * HOUR;
+    state.coins -= cuttingCost(plant);
+    plant.cutUntil = now + (cuttingCost(plant) ? 48 : 12) * HOUR;
     return cutting;
   }
 
@@ -798,6 +838,23 @@ window.Garden = (() => {
   }
 
   const discoveredCount = state => new Set(state.discovered.map(key => key.split(":")[0])).size;
+  const standardSpeciesCount = state => STANDARD_CATALOG.filter(species => state.discovered.some(key => key.startsWith(species.id + ":"))).length;
+  const mythicSpeciesCount = state => MYTHIC_SPECIES.filter(species => state.discovered.some(key => key.startsWith(species.id + ":"))).length;
+  const standardPhenotypes = state => state.discovered.filter(key => SPECIES[key.split(":")[0]]?.tier < 4).length;
+
+  function lampExtensionCost(state) {
+    return (state.lampExtensions ?? 0) >= 4 ? null : 1000 * 2 ** (state.lampExtensions ?? 0);
+  }
+
+  function buyLampExtension(state) {
+    initializeProgression(state);
+    const cost = lampExtensionCost(state);
+    if (cost === null || standardSpeciesCount(state) < 20 || state.coins < cost) return false;
+    state.coins -= cost;
+    state.lampExtensions++;
+    return true;
+  }
+
   const AUTOMATIONS = {
     collector: {
       name: "Coin collector", cost: 120, species: 4, icon: "coin",
@@ -869,8 +926,8 @@ window.Garden = (() => {
         { name: "First discoveries", description: "Discover 5 species.", metric: "species", target: 5, reward: 35 },
         { name: "A growing field guide", description: "Discover 12 species.", metric: "species", target: 12, reward: 90 },
         { name: "A living library", description: "Discover 24 species.", metric: "species", target: 24, reward: 220 },
-        { name: "Every silhouette revealed", description: "Discover all 40 species.", metric: "species", target: 40, reward: 500 },
-        { name: "A complete botanical record", description: "Discover all 204 phenotypes.", metric: "phenotypes", target: 204, reward: 1200 },
+        { name: "Every silhouette revealed", description: "Discover all 40 greenhouse species.", metric: "standardSpecies", target: 40, reward: 500 },
+        { name: "A complete botanical record", description: "Discover all 204 greenhouse phenotypes.", metric: "standardPhenotypes", target: 204, reward: 1200 },
       ],
     },
     {
@@ -890,7 +947,7 @@ window.Garden = (() => {
         { name: "Perfect form", description: "Keep a plant pruned to Shape 5.", metric: "shape", target: 5, reward: 90 },
         { name: "A pair of living sculptures", description: "Own 2 mature trees with 80% health and Shape 3.", metric: "trainedTrees", target: 2, reward: 180 },
         { name: "Master bonsai collection", description: "Own 3 mature trees with 85% health and Shape 5.", metric: "masterTrees", target: 3, reward: 400 },
-        { name: "The miniature forest", description: "Discover all 8 tree species.", metric: "treeSpecies", target: 8, reward: 650 },
+        { name: "The miniature forest", description: "Discover all 8 greenhouse tree species.", metric: "treeSpecies", target: 8, reward: 650 },
       ],
     },
     {
@@ -903,12 +960,27 @@ window.Garden = (() => {
         { name: "A garden of renown", description: "Earn 5,000 coins from plant displays.", metric: "displayIncome", target: 5000, reward: 1000 },
       ],
     },
+    {
+      id: "mythic", name: "Mythic conservator", icon: "star",
+      steps: [
+        { name: "Beyond the glasshouse", description: "Discover your first Mythic species.", metric: "mythicSpecies", target: 1, reward: 350 },
+        { name: "A rare responsibility", description: "Own a Mythic plant at 90% maturity, 90% health, and Shape 3.", metric: "masterMythics", target: 1, reward: 600 },
+        { name: "A hidden garden", description: "Discover 3 Mythic species.", metric: "mythicSpecies", target: 3, reward: 900 },
+        { name: "The six lost specimens", description: "Discover all 6 Mythic species.", metric: "mythicSpecies", target: 6, reward: 1800 },
+        { name: "The living archive", description: "Discover all 240 phenotypes, including Mythics.", metric: "phenotypes", target: 240, reward: 3000 },
+      ],
+    },
   ];
 
   function questProgress(state, quest) {
     switch (quest.metric) {
       case "species": return discoveredCount(state);
       case "phenotypes": return state.discovered.length;
+      case "standardSpecies": return standardSpeciesCount(state);
+      case "standardPhenotypes": return standardPhenotypes(state);
+      case "mythicSpecies": return mythicSpeciesCount(state);
+      case "masterMythics": return state.plants.filter(plant => SPECIES[plant.species].tier === 4 &&
+        plant.size >= 90 && plant.health >= 90 && plant.quality >= 3).length;
       case "crosses": return state.journal.filter(entry => entry.source !== "cutting" && entry.parents?.length === 2).length;
       case "shape": return state.plants.reduce((best, plant) => Math.max(best, plant.quality), 0);
       case "trainedTrees": return state.plants.filter(plant =>
@@ -916,7 +988,7 @@ window.Garden = (() => {
       case "masterTrees": return state.plants.filter(plant =>
         SPECIES[plant.species].shape === "tree" && plant.size >= 83 && plant.health >= 85 && plant.quality === 5).length;
       case "treeSpecies": return CATALOG.filter(species =>
-        species.shape === "tree" && state.discovered.some(key => key.startsWith(species.id + ":"))).length;
+        species.shape === "tree" && species.tier < 4 && state.discovered.some(key => key.startsWith(species.id + ":"))).length;
       case "orders": return state.stats?.ordersCompleted ?? 0;
       case "displayIncome": return Math.floor(state.stats?.displayEarned ?? 0);
     }
@@ -949,8 +1021,13 @@ window.Garden = (() => {
     },
     rare: {
       name: "Rare canopy", icon: "star", reward: 360,
-      description: "Rare or Legendary plants at 75% maturity, 80% health, and Shape 2.",
+      description: "Rare, Legendary, or Mythic plants at 75% maturity, 80% health, and Shape 2.",
       test: plant => SPECIES[plant.species].tier >= 2 && plant.size >= 75 && plant.health >= 80 && plant.quality >= 2,
+    },
+    mythic: {
+      name: "The lost conservatory", icon: "star", reward: 900, unlock: 40, maxSpecies: 6,
+      description: "Mythic plants at 90% maturity, 90% health, and Shape 4.",
+      test: plant => SPECIES[plant.species].tier === 4 && plant.size >= 90 && plant.health >= 90 && plant.quality >= 4,
     },
   };
 
@@ -959,15 +1036,16 @@ window.Garden = (() => {
     if (!exhibition) return null;
     const record = state.exhibitions?.[id];
     const wins = record?.wins ?? 0;
-    const target = Math.min(5, 3 + Math.floor(wins / 2));
+    const target = Math.min(exhibition.maxSpecies ?? 5, 3 + Math.floor(wins / 2));
     const ranked = state.plants.filter(exhibition.test).sort((a, b) => displayRate(b, state) - displayRate(a, state));
     const unique = new Map();
     for (const plant of ranked) if (!unique.has(plant.species)) unique.set(plant.species, plant);
     const participants = [...unique.values()].slice(0, target);
-    const unlocked = discoveredCount(state) >= 12;
+    const unlock = exhibition.unlock ?? 12;
+    const unlocked = standardSpeciesCount(state) >= unlock;
     const enteredToday = record && localDay(now) <= record.lastDay;
     return {
-      participants, target, wins, unlocked, enteredToday,
+      participants, target, wins, unlocked, enteredToday, unlock,
       ready: unlocked && !enteredToday && participants.length === target,
       reward: exhibition.reward + 20 * Math.min(wins, 10),
     };
@@ -984,14 +1062,119 @@ window.Garden = (() => {
     return status.reward;
   }
 
+  const MYTHIC_RESEARCH = [
+    {
+      id: "moonlotus", name: "The moonlit conservatory", cost: 1500,
+      description: "Restore the conditions described in an old keeper’s journal.",
+      requirements: [
+        { label: "Greenhouse species discovered", metric: "standardSpecies", target: 24 },
+        { label: "Greenhouse phenotypes discovered", metric: "standardPhenotypes", target: 60 },
+        { label: "Exhibition wins", metric: "exhibitionWins", target: 6 },
+        { label: "Different flowering species at 83% maturity and 85% health", metric: "floweringSpecies", target: 3 },
+      ],
+    },
+    {
+      id: "embermaple", name: "The emberwood trial", cost: 2000,
+      description: "Assemble a collection that proves years of patient shaping.",
+      requirements: [
+        { label: "Greenhouse tree species discovered", metric: "treeSpecies", target: 6 },
+        { label: "Different trees at 90% maturity, 90% health, and Shape 5", metric: "masterTreeSpecies", target: 4 },
+        { label: "Miniature forest exhibition wins", metric: "bonsaiWins", target: 8 },
+        { label: "Coins earned from displays", metric: "displayIncome", target: 5000 },
+      ],
+    },
+    {
+      id: "silverfern", name: "The silver herbarium", cost: 1800,
+      description: "Rebuild the propagation records of a long-lost nursery.",
+      requirements: [
+        { label: "Greenhouse phenotypes discovered", metric: "standardPhenotypes", target: 80 },
+        { label: "Cuttings successfully potted", metric: "cuttings", target: 10 },
+        { label: "Cross-bred seedlings potted", metric: "crosses", target: 30 },
+        { label: "Collector orders completed", metric: "orders", target: 30 },
+      ],
+    },
+    {
+      id: "glassorchid", name: "The glasswing reserve", cost: 3000,
+      description: "Complete a living archive before raising its most delicate specimen.",
+      requirements: [
+        { label: "Greenhouse species discovered", metric: "standardSpecies", target: 40 },
+        { label: "Greenhouse phenotypes discovered", metric: "standardPhenotypes", target: 120 },
+        { label: "Cross-bred seedlings potted", metric: "crosses", target: 50 },
+        { label: "Exhibition wins", metric: "exhibitionWins", target: 15 },
+      ],
+    },
+    {
+      id: "dawnwood", name: "The dawnwood sanctuary", cost: 4000,
+      description: "Establish a miniature forest worthy of an ancient seed.",
+      requirements: [
+        { label: "Greenhouse tree species discovered", metric: "treeSpecies", target: 8 },
+        { label: "Different trees at 90% maturity, 90% health, and Shape 5", metric: "masterTreeSpecies", target: 5 },
+        { label: "Miniature forest exhibition wins", metric: "bonsaiWins", target: 12 },
+        { label: "Coins earned from displays", metric: "displayIncome", target: 12000 },
+      ],
+    },
+    {
+      id: "nightqueen", name: "The midnight crown", cost: 5000,
+      description: "The final research commission is offered to an exceptional conservator.",
+      requirements: [
+        { label: "Mythic species discovered", metric: "mythicSpecies", target: 3 },
+        { label: "Collector orders completed", metric: "orders", target: 100 },
+        { label: "Coins earned from displays", metric: "displayIncome", target: 25000 },
+        { label: "Rare canopy exhibition wins", metric: "rareWins", target: 12 },
+      ],
+    },
+  ];
+
+  function researchProgress(state, requirement) {
+    switch (requirement.metric) {
+      case "exhibitionWins": return Object.values(state.exhibitions).reduce((sum, record) => sum + record.wins, 0);
+      case "bonsaiWins": return state.exhibitions.bonsai?.wins ?? 0;
+      case "rareWins": return state.exhibitions.rare?.wins ?? 0;
+      case "cuttings": return state.journal.filter(entry => entry.source === "cutting").length;
+      case "floweringSpecies": return new Set(state.plants.filter(plant =>
+        SPECIES[plant.species].shape === "flower" && plant.size >= 83 && plant.health >= 85
+      ).map(plant => plant.species)).size;
+      case "masterTreeSpecies": return new Set(state.plants.filter(plant =>
+        SPECIES[plant.species].shape === "tree" && plant.size >= 90 && plant.health >= 90 && plant.quality === 5
+      ).map(plant => plant.species)).size;
+      default: return questProgress(state, requirement);
+    }
+  }
+
+  function mythicResearchStatus(state, research) {
+    const claimed = state.mythicClaims.includes(research.id);
+    const progress = research.requirements.map(requirement => ({
+      ...requirement, value: claimed ? requirement.target : Math.min(requirement.target, researchProgress(state, requirement)),
+    }));
+    const completed = progress.every(requirement => requirement.value >= requirement.target);
+    return {
+      claimed, progress, completed,
+      ready: !claimed && completed && freeSlots(state) > 0 && state.coins >= research.cost,
+    };
+  }
+
+  function claimMythic(state, id, now) {
+    initializeProgression(state);
+    const research = MYTHIC_RESEARCH.find(item => item.id === id);
+    if (!research || !mythicResearchStatus(state, research).ready) return null;
+    const seed = {
+      id: state.nextId++, species: id, pheno: 0, source: "mythic", parents: [], readyAt: now + 2 * HOUR,
+      traits: { stature: Math.round(Math.random() * 100), leafSize: Math.round(Math.random() * 100) },
+    };
+    state.coins -= research.cost;
+    state.mythicClaims.push(id);
+    state.seeds.push(seed);
+    return seed;
+  }
+
   const GOALS = [
     { name: "A second chance", description: "Water, move, and prune your pothos to reach 72% health.", reward: 14, test: s => s.history.recovered },
     { name: "Make room for company", description: "Buy a plant from the market.", reward: 8, test: s => s.history.bought },
     { name: "New roots", description: "Pot your first seedling in the breeding room.", reward: 18, test: s => s.history.harvested },
     { name: "A rare discovery", description: "Breed a Rare or Legendary plant.", reward: 40, test: s => s.history.rareCross },
     { name: "An established collection", description: "Discover 20 plant species.", reward: 150, test: s => discoveredCount(s) >= CLASSIC_SPECIES_COUNT },
-    { name: "An expanded collection", description: "Discover 32 plant species.", reward: 200, test: s => discoveredCount(s) >= RARITIES.length * WOODY_GROUP_START },
-    { name: "The complete collection", description: "Discover all " + CATALOG.length + " plant species.", reward: 250, test: s => discoveredCount(s) === CATALOG.length },
+    { name: "An expanded collection", description: "Discover 32 plant species.", reward: 200, test: s => discoveredCount(s) >= 4 * WOODY_GROUP_START },
+    { name: "The complete collection", description: "Discover all 40 greenhouse species.", reward: 250, test: s => standardSpeciesCount(s) === STANDARD_CATALOG.length },
   ];
 
   return {
@@ -999,7 +1182,9 @@ window.Garden = (() => {
     CATALOG, SPECIES, SUPPLIES, GOALS, POT_STYLES, SOIL_MIXES, clamp, traitsFor, traitScales,
     initializeProgression, AUTOMATIONS, buyAutomation, toggleAutomation, curateDisplays, collectDisplayCoins,
     displayMultiplier, promotionCost, buyPromotion, QUEST_TRACKS, activeQuest, questProgress, claimQuest,
-    EXHIBITIONS, exhibitionStatus, enterExhibition, discoveredCount,
+    EXHIBITIONS, exhibitionStatus, enterExhibition, discoveredCount, STANDARD_CATALOG, MYTHIC_SPECIES,
+    crossCost, crossProblem, cuttingCost, growLampCapacity, lampExtensionCost, buyLampExtension,
+    MYTHIC_RESEARCH, mythicResearchStatus, claimMythic, standardSpeciesCount, mythicSpeciesCount,
     potStyle, soilMix, repotCost, repotPlant, renamePlant, familyFor, lastCrossResult,
     phaseAt, careNeeds, dryingRate, movePlant, waterRange, waterPlant, fresh, addPlant, advance, displayRate, salePrice, upgradeSavedShelves, shelfCost, buyShelfUpgrade, freeSlots,
     hasUpgrade, buyUpgrade, lightWorks, branchAngles, trainBranches, displayedPlants, displayCapacity, displaySpotCost, buyDisplaySpot,

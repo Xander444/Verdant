@@ -37,16 +37,26 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - Six collector requests rotate at local midnight. Grow, prune, or breed a plant to meet a request, then choose it for delivery. Each delivery pays the plant’s sale price plus the posted bonus and immediately adds a replacement request.
 - Pin one open order to carry it into subsequent days. Delivering or unpinning it frees the pin.
 - The Market refreshes every five minutes. Golden Pothos is always available alongside four rotating Common plants. Uncommon, Rare, and Legendary plants appear in limited quantities, and rarer species appear less often. Buying a species for the first time adds it to the Field Guide.
-- The catalog contains 40 species, including bonsai and other woody plants.
+- The catalog contains 46 species and 240 phenotypes, including six Mythics earned through research.
 
 ## Quests, automation, and exhibitions
 
 - The Field Guide shows every species as a silhouette until you discover it. Revealed entries stay in your guide after selling a plant.
-- Open **Quests** to follow 20 quests across collection, breeding, pruning, and collector orders. Existing discoveries and potted offspring count. Earlier order deliveries count when they are still represented in the saved order board.
+- Open **Quests** to follow 25 quests across collection, breeding, pruning, and collector orders. Existing discoveries and potted offspring count. Earlier order deliveries count when they are still represented in the saved order board.
 - The Market sells a **Coin collector** for 120 coins after discovering four species. It transfers whole display coins into your wallet, including during offline catch-up.
 - A **Display curator** costs 360 coins and unlocks at ten species. It places your highest-earning plants on display and rechecks them during catch-up. Use Pause to arrange displays yourself. Manually changing a display also pauses the curator.
 - At 20 discovered species, buy up to three **Visitor programme** levels. They cost 600, 1,200, and 2,400 coins and each add 10% to display earnings.
 - Discover 12 species to unlock three **Conservatory exhibitions** on the Quests page. Grow different qualifying species, then enter to earn coins and a permanent 5% display-income bonus for the first win in each category. Plants stay in your collection. Enter each category once per local day, with larger collections required as you win repeatedly.
+
+## Mythic plants and advanced collections
+
+- Six **Mythic research** commissions appear on the Quests page. Each requires several collection, breeding, or exhibition milestones, a funding payment of 1,500 to 5,000 coins, and a free nursery space.
+- Research awards one sealed seed per commission. It germinates for two hours. Pot it to reveal its species. Names and portraits stay hidden until the first discovery.
+- Mythic plants have six phenotypes each. They need more water, humidity, and nutrients and earn higher display income. Their original pots have an aged bronze glaze.
+- Mythic plants can breed with another plant of the same species at 75% maturity and 90% health. A cross costs 100 coins and germinates for 90 minutes, followed by six hours of recovery. A Mythic cutting needs 96% maturity and 92% health, costs 125 coins, roots for six hours, and has a 48-hour cooldown.
+- After discovering 20 greenhouse species, buy **Grow-lamp extensions** in the Market. Each adds one spot, up to six total. They cost 1,000, 2,000, 4,000, and 8,000 coins.
+- **The lost conservatory** exhibition needs three different mature, healthy Mythic species. Repeat wins raise its required collection to six species. Its first ribbon gives the same permanent display-income bonus as other exhibitions.
+- The five **Mythic conservator** quests lead from your first research plant to completing all 240 phenotypes. Existing collection quests continue to count the original 40 greenhouse species and 204 phenotypes.
 
 ## Artwork and typography
 

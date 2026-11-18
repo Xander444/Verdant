@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const G = window.Garden;
-  const { SPECIES, CATALOG, RARITIES, LOCATIONS, GOALS, SUPPLIES, AUTOMATIONS, QUEST_TRACKS, EXHIBITIONS, POT_STYLES, SOIL_MIXES, GROW_LAMP, GROW_LAMP_SLOTS, HOUR } = G;
+  const { SPECIES, CATALOG, RARITIES, LOCATIONS, GOALS, SUPPLIES, AUTOMATIONS, QUEST_TRACKS, EXHIBITIONS, MYTHIC_RESEARCH, POT_STYLES, SOIL_MIXES, GROW_LAMP, HOUR } = G;
   const STORE = "verdant-greenhouse-v1";
   const app = document.querySelector("#app");
   const dialog = document.querySelector("#dialog");
@@ -359,7 +359,7 @@
         <div class="station-heading"><span class="tile-icon">${icon(stationIcons[spot])}</span>
           <div><h3>${name}</h3><p>${note}</p></div>
           <div class="station-badges">
-            ${lamp ? `<span class="count-pill lamp-capacity ${full ? "lamp-full" : ""}">${lampCount} / ${GROW_LAMP_SLOTS} spots</span>` : ""}
+            ${lamp ? `<span class="count-pill lamp-capacity ${full ? "lamp-full" : ""}">${lampCount} / ${G.growLampCapacity(state)} spots</span>` : ""}
             ${recommended ? '<span class="count-pill station-recommended">Good light now</span>' : ""}
           </div>
         </div>
@@ -466,6 +466,7 @@
     }).join("");
     const cost = G.promotionCost(state);
     const level = state.promotionLevel;
+    const lampCost = G.lampExtensionCost(state);
     return `<section aria-labelledby="automation-title">
       <div class="section-heading listing-heading"><h2 id="automation-title">Automation and visitors</h2>
         <span class="count-pill">+${Math.round((G.displayMultiplier(state) - 1) * 100)}% display income</span></div>
@@ -479,7 +480,45 @@
             extra: `aria-label="Upgrade Visitor programme for ${cost} coins"`,
           })}
         </article>
+        <article class="paper automation-card" data-automation="lamp-extension">
+          <span class="tile-icon">${icon("lamp")}</span><div><h3>Grow-lamp extension</h3>
+            <p>Add one grow-lamp spot, up to six in total.</p>
+            <small>${G.growLampCapacity(state)} / 6 spots · ${G.standardSpeciesCount(state) < 20 ? "Unlocks at 20 greenhouse species" : "Growth and drying rates apply to each spot"}</small></div>
+          ${lampCost === null ? '<span class="count-pill">Fully extended</span>' : button(coins(lampCost), "buy-lamp-extension", {
+            className: "compact", disabled: G.standardSpeciesCount(state) < 20 || state.coins < lampCost,
+            extra: `aria-label="Buy a grow-lamp spot for ${lampCost} coins"`,
+          })}
+        </article>
       </div>
+    </section>`;
+  }
+
+  function mythicResearch() {
+    return `<section aria-labelledby="mythic-title">
+      <div class="section-heading listing-heading"><h2 id="mythic-title">Mythic research</h2>
+        <span class="count-pill">${state.mythicClaims.length} / 6 commissions funded</span></div>
+      <p class="section-description">Meet every requirement, fund the commission, and reserve a nursery space. Each research seed germinates for two hours. Pot it to reveal a Mythic species.</p>
+      <div class="research-grid">${MYTHIC_RESEARCH.map(research => {
+        const status = G.mythicResearchStatus(state, research);
+        const species = SPECIES[research.id];
+        const discovered = state.discovered.some(key => key.startsWith(research.id + ":"));
+        const note = status.claimed ? "Research seed received" : G.freeSlots(state) < 1 ? "Free a shelf space for the nursery" :
+          status.completed && state.coins < research.cost ? "More coins needed to fund research" : "Complete every requirement to fund research";
+        return `<article class="paper research-card" data-research="${research.id}">
+          <div class="research-art ${discovered ? "" : "plant-silhouette"}">${canvas(species, { size: 72 })}${tierBadge(species)}</div>
+          <div class="research-body"><h3>${research.name}</h3><p>${discovered ? species.name : research.description}</p>
+            <ul class="research-requirements">${status.progress.map(requirement =>
+              `<li${requirement.value >= requirement.target ? ' class="complete-requirement"' : ""}>
+                <span>${requirement.label}</span><strong>${numberFormat.format(requirement.value)} / ${numberFormat.format(requirement.target)}</strong></li>`
+            ).join("")}</ul>
+            <small>${status.ready ? "Research ready to fund" : note}</small>
+            <div class="order-bottom">${status.claimed ? '<span class="count-pill">' + icon("check") + ' Seed secured</span>' :
+              button(`Fund research ${coins(research.cost)}`, "claim-mythic", {
+                className: "primary compact", disabled: !status.ready, extra: `data-id="${research.id}"`,
+              })}</div>
+          </div>
+        </article>`;
+      }).join("")}</div>
     </section>`;
   }
 
@@ -504,13 +543,14 @@
     return `${pageIntro("Grower Quests", "Build a complete collection, grow a breeding legacy, and prepare your finest plants for exhibition.", "trophy",
       `<span class="count-pill">${state.quests.claimed.length} / ${total} quests completed</span>`)}
       <section aria-label="Quest chains"><div class="quest-grid">${quests}</div></section>
+      ${mythicResearch()}
       <section aria-labelledby="exhibitions-title">
         <div class="section-heading listing-heading"><h2 id="exhibitions-title">Conservatory exhibitions</h2>
           <span class="count-pill">${countSpecies() < 12 ? "Unlock at 12 species" : "Entries refresh at local midnight"}</span></div>
         <p class="section-description">Each entry needs different species. Your best qualifying plants take part and stay in your collection. Earn a ribbon and a permanent 5% display-income bonus for each exhibition you win for the first time.</p>
         <div class="exhibition-grid">${Object.entries(EXHIBITIONS).map(([id, exhibition]) => {
           const status = G.exhibitionStatus(state, id, now);
-          const message = !status.unlocked ? "Discover 12 species to enter" : status.enteredToday ?
+          const message = !status.unlocked ? `Discover ${status.unlock} greenhouse species to enter` : status.enteredToday ?
             `Enter again in ${countdown(G.nextOrderDay(now))}` : `${status.participants.length} / ${status.target} qualifying species`;
           return `<article class="paper exhibition-card" data-exhibition="${id}">
             <div class="goal-top"><span class="tile-icon">${icon(exhibition.icon)}</span>
@@ -572,7 +612,9 @@
               disabled: !open || state.coins < species.price,
             })}</div>
           </article>`;
-        }).join("")}</div>` : `<div class="paper collection-empty">${icon("clock")} Check the next restock for plants of this rarity.</div>`}
+        }).join("")}</div>` : `<div class="paper collection-empty">${icon(view.marketFilter === "4" ? "star" : "clock")} ${view.marketFilter === "4" ?
+          'Mythic plants are earned through special research. <a class="text-link" href="#quests">Open Quests</a>' :
+          "Check the next restock for plants of this rarity."}</div>`}
       </section>`;
   }
 
@@ -660,7 +702,8 @@
     const a = findParent(view.parentA);
     const b = findParent(view.parentB);
     const valid = a && b && a !== b;
-    const problem = valid ? G.parentProblem(a, now) || G.parentProblem(b, now) : "";
+    const problem = valid ? G.crossProblem(a, b) || G.parentProblem(a, now) || G.parentProblem(b, now) : "";
+    const price = G.crossCost(a, b);
     const parentSlot = (id, label, plant, other) => {
       const species = plant && SPECIES[plant.species];
       return `<div class="parent-slot">
@@ -681,10 +724,10 @@
     const pastSpecies = previous && SPECIES[previous.species];
     const crossNote = valid ? "Pot the seedling to discover what this pair produced."
       : "Choose two plants with at least 72% health and 42% maturity.";
-    const cause = problem || (!G.freeSlots(state) ? "Open a shelf space for the seedling." : state.coins < G.CROSS_COST ? "You need 5 coins to start a cross." : "");
+    const cause = problem || (!G.freeSlots(state) ? "Open a shelf space for the seedling." : state.coins < price ? `You need ${price} coins to start a cross.` : "");
     return `${pageIntro("Breeding Room", "Pair healthy plants to discover new species and phenotypes.", "dna")}
       <div class="breeding-grid">
-        <section class="paper cross-card"><div class="section-heading"><h2>Choose parents</h2><span class="count-pill">${coins(G.CROSS_COST)} per cross</span></div>
+        <section class="paper cross-card"><div class="section-heading"><h2>Choose parents</h2><span class="count-pill">${coins(price)} per cross</span></div>
           <label class="breedable-filter"><input type="checkbox" id="breedable-only" data-filter="breedableOnly"${view.breedableOnly ? " checked" : ""}> Ready to breed only</label>
           <div class="parents">${parentSlot("parentA", "First parent", a, b)}<span class="cross-plus">${icon("plus")}</span>${parentSlot("parentB", "Second parent", b, a)}</div>
           ${pastSpecies ? `<div class="cross-note cross-history">
@@ -703,7 +746,7 @@
             const name = cutting ? SPECIES[seed.species].name : "";
             const detail = ready ? name || "Pot to reveal the seedling." :
               `${name ? name + " · " : ""}${countdown(seed.readyAt)} remaining`;
-            return `<article class="seed-row" data-seed="${seed.id}"><span class="tile-icon">${icon("sprout")}</span><div><h3>${ready ? "Ready to pot" : cutting ? "Rooting cutting" : "Germinating"}</h3>
+            return `<article class="seed-row" data-seed="${seed.id}"><span class="tile-icon">${icon("sprout")}</span><div><h3>${ready ? "Ready to pot" : cutting ? "Rooting cutting" : seed.source === "mythic" ? "Mythic seed germinating" : "Germinating"}</h3>
               <p>${detail}</p></div>
               ${button(cutting ? "Pot cutting" : "Pot seedling", "pot", { className: "compact", extra: `data-id="${seed.id}"`, disabled: !ready })}</article>`;
           }).join("")}</div>` : `<div class="nursery-empty"><span class="tile-icon">${icon("leaf")}</span><h3>The tray is empty</h3><p>Seeds and cuttings grow here. Each reserves one shelf space.</p></div>`}
@@ -1139,11 +1182,13 @@
     const species = SPECIES[plant.species];
     const problem = G.cuttingProblem(plant, now) || (G.freeSlots(state) <= 0 ? "Free a shelf space to reserve for the cutting" : "");
     const duration = G.rootingTime(plant) / G.MINUTE;
+    const cost = G.cuttingCost(plant);
+    const budgetProblem = cost > state.coins ? `You need ${cost} coins for this cutting.` : "";
     openDialog(`Take a cutting from ${species.name}`, `<p>Grow a new ${species.phenotypes[plant.pheno]} plant. The cutting takes ${duration} minutes to root in the nursery and reserves one shelf space.</p>
-      <p class="species-needs">The parent gives up 8 maturity points and can provide one cutting every 12 hours.</p>
-    ${problem ? `<p class="cutting-warning">${icon("info")} ${problem}</p>` : ""}
-      <div class="dialog-actions">${button("Cancel", "close")}${button("Take cutting", "cut", {
-        symbol: "prune", className: "primary", extra: `data-id="${plant.id}"`, disabled: Boolean(problem),
+      <p class="species-needs">The parent gives up 8 maturity points and can provide one cutting every ${cost ? 48 : 12} hours.</p>
+    ${problem || budgetProblem ? `<p class="cutting-warning">${icon("info")} ${problem || budgetProblem}</p>` : ""}
+      <div class="dialog-actions">${button("Cancel", "close")}${button(cost ? `Take cutting ${coins(cost)}` : "Take cutting", "cut", {
+        symbol: "prune", className: "primary", extra: `data-id="${plant.id}"`, disabled: Boolean(problem || budgetProblem),
       })}</div>`);
   }
 
@@ -1366,6 +1411,15 @@
         if (!G.toggleAutomation(state, id)) return;
         return confirmed(`${AUTOMATIONS[id].name} ${state.automation[id].enabled ? "enabled" : "paused"}.`,
           [`[data-automation="${id}"]`], [".income-card"]);
+      case "buy-lamp-extension":
+        if (!G.buyLampExtension(state)) return "This grow-lamp extension is unavailable.";
+        return confirmed("Grow lamp extended. One more plant can use it.", ['[data-automation="lamp-extension"]'], walletMotion);
+      case "claim-mythic": {
+        const seed = G.claimMythic(state, id, now);
+        if (!seed) return "Meet every requirement and reserve a nursery space to fund this research.";
+        return confirmed("Mythic research funded. The sealed seed is germinating in your nursery.",
+          [`[data-research="${id}"]`], walletMotion);
+      }
       case "buy-promotion":
         if (!G.buyPromotion(state)) return "This upgrade is unavailable.";
         return confirmed("Visitor programme upgraded. Display earnings increased.", ['[data-automation="promotion"]'], walletMotion);
