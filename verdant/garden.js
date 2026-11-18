@@ -10,6 +10,10 @@ window.Garden = (() => {
   const INHERITED_TRAIT_CHANCE = .62;
   const FAVOR_WEIGHT = .80;
   const STARTING_DISPLAY_SPOTS = 2;
+  const MAX_DISPLAY_SPOTS = 16;
+  const HINT_COST = 25;
+  const ORDER_LIMIT = 6;
+  const ORDER_SLOTS = ["grow", "prune", "phenotype", "healthy", "bonsai", "windowsill"];
   const STARTING_SHELF_SPACE = 4;
   const MAX_SHELF_UPGRADES = 50;
   const RARITIES = ["Common", "Uncommon", "Rare", "Legendary", "Mythic"];
@@ -215,6 +219,7 @@ window.Garden = (() => {
   function initializeProgression(state) {
     state.automation ??= {};
     state.mythicClaims ??= [];
+    state.breedingHints ??= {};
     state.lampExtensions ??= 0;
     state.promotionLevel ??= 0;
     state.quests ??= { claimed: [] };
@@ -299,22 +304,31 @@ window.Garden = (() => {
   }
 
   function displayCapacity(state) {
-    return state.displaySpots ?? STARTING_DISPLAY_SPOTS;
+    return Math.min(MAX_DISPLAY_SPOTS, state.displaySpots ?? STARTING_DISPLAY_SPOTS);
   }
 
   function displaySpotCost(state) {
-    return 50 + (displayCapacity(state) - STARTING_DISPLAY_SPOTS) * 30;
+    const spots = displayCapacity(state);
+    return spots >= MAX_DISPLAY_SPOTS ? null : 50 + (spots - STARTING_DISPLAY_SPOTS) * 30;
   }
 
   function buyDisplaySpot(state) {
     const cost = displaySpotCost(state);
-    if (state.coins < cost) return false;
+    if (cost === null || state.coins < cost) return false;
     state.coins -= cost;
     state.displaySpots = displayCapacity(state) + 1;
     return true;
   }
 
   function enforceDisplayLimit(state) {
+    const previous = state.displaySpots ?? STARTING_DISPLAY_SPOTS;
+    if (previous > MAX_DISPLAY_SPOTS) {
+      // Return the original purchase prices of spots above the new cap.
+      const excess = previous - MAX_DISPLAY_SPOTS;
+      const firstRefund = 50 + (MAX_DISPLAY_SPOTS - STARTING_DISPLAY_SPOTS) * 30;
+      state.coins += excess * firstRefund + 15 * excess * (excess - 1);
+      state.displaySpots = MAX_DISPLAY_SPOTS;
+    }
     const displayed = displayedPlants(state);
     const limit = displayCapacity(state);
     if (displayed.length <= limit) return;
@@ -617,49 +631,107 @@ window.Garden = (() => {
     windowsill: (_, i) => ({
       species: ["spider", "boston", "peperomia", "wax", "swedish"][i % 5], size: [40, 46, 43][i % 3], bonus: 14,
     }),
+    foliage: (_, i) => ({ shape: ["fern", "bush", "heart", "trailing", "grass"][i % 5], size: 55, health: 80, bonus: 20 }),
+    succulent: (_, i) => ({ shape: "succulent", size: [60, 70, 65][i % 3], health: 85, bonus: 26 }),
+    mature: (_, i) => ({ size: [83, 90, 95][i % 3], health: 85, bonus: [30, 36, 42][i % 3] }),
+    tropical: (state, i) => {
+      const candidates = CATALOG.filter(species => species.tier >= 1 && speciesUnlocked(state, species) &&
+        ["shield", "fern", "heart", "monstera"].includes(species.shape));
+      const species = candidates[i % candidates.length];
+      return { species: species.id, size: 65, health: 85, bonus: 35 + 10 * species.tier };
+    },
+    flowering: (_, i) => ({ shape: "flower", size: [65, 75, 70][i % 3], health: 85, bonus: 36 }),
+    shaped: (_, i) => ({ size: 75, quality: 5, health: [85, 90, 95][i % 3], bonus: 65 }),
+    gallery: (_, i) => ({ displayIncome: [4, 6, 8][i % 3], health: 85, bonus: [45, 60, 75][i % 3] }),
+    homegrown: (_, i) => ({ origin: "cross", size: [55, 65, 60][i % 3], health: 85, bonus: 40 }),
+    cutting: (_, i) => ({ origin: "cutting", size: [45, 55, 50][i % 3], health: 85, bonus: 32 }),
+    rare: (_, i) => ({ tier: 2, size: 70, health: 90, quality: [2, 3, 4][i % 3], bonus: 90 }),
+    legendary: (_, i) => ({ tier: 3, size: 83, health: 90, quality: [2, 3, 4][i % 3], bonus: 180 }),
+    mythic: (_, i) => ({ tier: 4, size: 90, health: 92, quality: [3, 4, 5][i % 3], bonus: 500 }),
   };
+
+  function orderUnlocked(state, type) {
+    const discovered = CATALOG.filter(species => state.discovered.some(key => key.startsWith(species.id + ":")));
+    const hasTier = tier => discovered.some(species => species.tier === tier);
+    switch (type) {
+      case "tropical": return discovered.some(species => species.tier >= 1 && ["shield", "fern", "heart", "monstera"].includes(species.shape));
+      case "flowering": return discovered.some(species => species.shape === "flower");
+      case "shaped": return state.plants.some(plant => plant.quality >= 3);
+      case "gallery": return hasTier(1) || hasTier(2) || hasTier(3) || hasTier(4);
+      case "homegrown": return state.journal.some(entry => entry.source !== "cutting" && entry.parents?.length === 2);
+      case "cutting": return state.journal.some(entry => entry.source === "cutting");
+      case "rare": return hasTier(2);
+      case "legendary": return hasTier(3);
+      case "mythic": return hasTier(4);
+      default: return true;
+    }
+  }
 
   function makeOrder(state, slot, previous) {
     const board = state.orders;
+    const eligible = Object.keys(orderRequests).filter(type => orderUnlocked(state, type));
+    const occupied = new Set(board.entries.filter(order => order !== previous).map(order => order.type ?? order.slot));
+    const candidates = eligible.filter(type => !occupied.has(type) && type !== (previous?.type ?? previous?.slot));
+    const available = candidates.length ? candidates : eligible.filter(type => !occupied.has(type));
+    const cursor = board.nextType;
+    let offset = 0;
+    while (!available.includes(eligible[(cursor + offset) % eligible.length])) offset++;
+    const type = eligible[(cursor + offset) % eligible.length];
+    board.nextType = cursor + offset + 1;
+
     let variant = previous ? (previous.variant ?? board.rotation) + 1 : board.rotation;
-    let request = orderRequests[slot](state, variant);
-    if (previous && Object.entries(request).every(([key, value]) => previous[key] === value)) {
-      request = orderRequests[slot](state, ++variant);
+    let request = orderRequests[type](state, variant);
+    if (previous && type === (previous.type ?? previous.slot) &&
+        Object.entries(request).every(([key, value]) => previous[key] === value)) {
+      request = orderRequests[type](state, ++variant);
     }
     const baseId = board.day + "-" + slot;
     if (previous) board.refills++;
     const id = previous ? baseId + "-" + board.refills : baseId;
-    return { ...request, slot, id, variant };
+    return { ...request, type, slot, id, variant };
   }
 
   function rotateOrders(state, now) {
     const day = localDay(now);
     const previous = state.orders;
-    const slots = Object.keys(orderRequests);
-    if (previous && day <= previous.day) {
-      if (previous.refills !== undefined) return;
-      previous.refills = 0;
-      // Keep any open requests in an earlier save, including its pin.
-      previous.entries = slots.map(slot => {
-        const order = previous.entries.find(item => item.slot === slot);
-        return order && !order.fulfilled ? order : makeOrder(state, slot, order);
-      });
-      return;
-    }
-
-    const rotation = previous ? previous.rotation + day - previous.day : 0;
+    if (previous && day <= previous.day && previous.format === 2 && previous.entries.length === ORDER_LIMIT) return;
+    const sameDay = previous && day <= previous.day;
+    const rotation = previous ? previous.rotation + Math.max(0, day - previous.day) : 0;
     const pinned = previous?.entries.find(order => order.pinned && !order.fulfilled);
-    state.orders = { day, rotation, refills: 0, entries: [] };
-    state.orders.entries = slots.map(slot => pinned?.slot === slot ? pinned : makeOrder(state, slot));
+    const active = sameDay ? previous.entries.filter(order => !order.fulfilled &&
+      Object.hasOwn(orderRequests, order.type ?? order.slot)) : [];
+    const kept = new Map();
+    for (const order of [pinned, ...active]) {
+      if (order && ORDER_SLOTS.includes(order.slot) && !kept.has(order.slot)) kept.set(order.slot, order);
+    }
+    const entries = [...kept.values()];
+    for (const order of entries) order.type ??= order.slot;
+    state.orders = {
+      day: sameDay ? previous.day : day, rotation, format: 2,
+      refills: sameDay ? previous.refills ?? 0 : 0,
+      nextType: previous?.nextType ?? (previous ? ORDER_LIMIT + rotation * ORDER_LIMIT : 0),
+      entries,
+    };
+    for (const slot of ORDER_SLOTS) {
+      if (!entries.some(order => order.slot === slot)) {
+        const replaced = sameDay ? previous.entries.find(order => order.slot === slot) : undefined;
+        entries.push(makeOrder(state, slot, replaced));
+      }
+    }
+    entries.sort((a, b) => ORDER_SLOTS.indexOf(a.slot) - ORDER_SLOTS.indexOf(b.slot));
   }
 
-  function orderMatches(order, plant) {
+  function orderMatches(order, plant, state) {
     const species = SPECIES[plant.species];
     return (order.species === undefined || plant.species === order.species) &&
       (order.tier === undefined || species.tier === order.tier) &&
       (order.shape === undefined || species.shape === order.shape) &&
       (order.pheno === undefined || plant.pheno === order.pheno) &&
-      plant.size >= (order.size || 0) && plant.quality >= (order.quality || 0) && plant.health >= (order.health || 0);
+      plant.size >= (order.size || 0) && plant.quality >= (order.quality || 0) && plant.health >= (order.health || 0) &&
+      displayRate(plant, state) >= (order.displayIncome || 0) &&
+      (!order.origin || Boolean(state?.journal?.some(entry => entry.id === plant.id && (
+        order.origin === "cutting" ? entry.source === "cutting" : entry.source !== "cutting" && entry.parents?.length === 2
+      ))));
   }
 
   function toggleOrderPin(state, order) {
@@ -671,7 +743,7 @@ window.Garden = (() => {
 
   function deliverOrder(state, order, plant) {
     const index = state.orders.entries.indexOf(order);
-    if (index < 0 || order.fulfilled || !state.plants.includes(plant) || !orderMatches(order, plant)) return 0;
+    if (index < 0 || order.fulfilled || !state.plants.includes(plant) || !orderMatches(order, plant, state)) return 0;
     initializeProgression(state);
     const replacement = makeOrder(state, order.slot, order);
     const payout = salePrice(plant) + order.bonus;
@@ -716,6 +788,37 @@ window.Garden = (() => {
     const start = high < CLASSIC_GROUP_SIZE ? 0 : high < WOODY_GROUP_START ? CLASSIC_GROUP_SIZE : WOODY_GROUP_START;
     const end = start === 0 ? CLASSIC_GROUP_SIZE : start === CLASSIC_GROUP_SIZE ? WOODY_GROUP_START : group.length;
     return group[start + variety % (end - start)];
+  }
+
+  function makeBreedingHint(state, species) {
+    if (species.tier === 0) return { kind: "market" };
+    if (species.tier === 4) return { kind: "research", research: species.id };
+    const candidates = GROUPS[species.tier - 1];
+    const pairs = [];
+    for (let first = 0; first < candidates.length; first++) {
+      for (let second = first + 1; second < candidates.length; second++) {
+        const a = candidates[first], b = candidates[second];
+        if (crossPreview({ species: a.id }, { species: b.id })?.id === species.id) {
+          const owned = [a, b].filter(parent => state.plants.some(plant => plant.species === parent.id)).length;
+          const known = [a, b].filter(parent => speciesUnlocked(state, parent)).length;
+          pairs.push({ parents: [a.id, b.id], score: owned * 10 + known, price: a.price + b.price });
+        }
+      }
+    }
+    pairs.sort((a, b) => b.score - a.score || a.price - b.price);
+    return pairs.length ? { kind: "breeding", parents: pairs[0].parents } : null;
+  }
+
+  function buyBreedingHint(state, speciesId) {
+    initializeProgression(state);
+    const species = Object.hasOwn(SPECIES, speciesId) && SPECIES[speciesId];
+    if (!species || Object.hasOwn(state.breedingHints, speciesId) || state.coins < HINT_COST ||
+        state.discovered.some(key => key.startsWith(speciesId + ":"))) return false;
+    const hint = makeBreedingHint(state, species);
+    if (!hint) return false;
+    state.coins -= HINT_COST;
+    state.breedingHints[speciesId] = hint;
+    return true;
   }
 
   function favoredTraitParent(a, b, requestedId) {
@@ -1178,7 +1281,7 @@ window.Garden = (() => {
   ];
 
   return {
-    MINUTE, HOUR, CROSS_COST, RARITIES, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES, GROW_LAMP, GROW_LAMP_SLOTS,
+    MINUTE, HOUR, CROSS_COST, RARITIES, MAX_DISPLAY_SPOTS, HINT_COST, ORDER_LIMIT, buyBreedingHint, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES, GROW_LAMP, GROW_LAMP_SLOTS,
     CATALOG, SPECIES, SUPPLIES, GOALS, POT_STYLES, SOIL_MIXES, clamp, traitsFor, traitScales,
     initializeProgression, AUTOMATIONS, buyAutomation, toggleAutomation, curateDisplays, collectDisplayCoins,
     displayMultiplier, promotionCost, buyPromotion, QUEST_TRACKS, activeQuest, questProgress, claimQuest,

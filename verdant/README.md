@@ -29,19 +29,19 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - Offspring inherit differences in appearance from their parents, and these differences affect sale value. Cuttings retain the parent's inherited appearance.
 - Plants with at least 83% maturity and 75% health can provide a cutting of the same phenotype. A cutting uses one nursery space and costs its parent 8 maturity points. It roots in 20 to 75 minutes, depending on rarity.
 - You start with four plant and seedling spaces. Each **Extra shelf space** upgrade doubles that total. Prices start at 28 coins and double with each purchase. Upgrades bought before doubling was introduced count automatically. One previous purchase gives you eight spaces and two give you sixteen.
-- Check the rate under a plant’s portrait to see what it earns per hour on display. The swap dialog shows the hourly rates for both the incoming plant and the plants already displayed. You start with two display spots. The Market sells extra spots one at a time, starting at 50 coins and increasing by 30 coins with each purchase. Select **Swap onto display** to replace one when the display is full. Collect whole display coins in the greenhouse.
+- Check the rate under a plant’s portrait to see what it earns per hour on display. The swap dialog shows the hourly rates for both the incoming plant and the plants already displayed. You start with two display spots. The Market sells extra spots one at a time up to a maximum of 16, starting at 50 coins and increasing by 30 coins with each purchase. Older purchases above 16 are refunded at their original prices. Select **Swap onto display** to replace one when the display is full. Collect whole display coins in the greenhouse.
 - The device's local clock drives light, drying, growth, and germination. Plant care and display earnings catch up for up to seven days between visits. Progress saves in the browser you play in.
 
 ## Collector orders and market restocks
 
-- Six collector requests rotate at local midnight. Grow, prune, or breed a plant to meet a request, then choose it for delivery. Each delivery pays the plant’s sale price plus the posted bonus and immediately adds a replacement request.
+- Six collector requests stay active at a time, drawn from 18 request types as your collection and growing history develop. Each delivery cycles that spot to another available type. Requests rotate at local midnight. Grow, prune, or breed a plant to meet a request, then choose it for delivery. Each delivery pays the plant’s sale price plus the posted bonus and immediately adds a replacement request.
 - Pin one open order to carry it into subsequent days. Delivering or unpinning it frees the pin.
 - The Market refreshes every five minutes. Golden Pothos is always available alongside four rotating Common plants. Uncommon, Rare, and Legendary plants appear in limited quantities, and rarer species appear less often. Buying a species for the first time adds it to the Field Guide.
 - The catalog contains 46 species and 240 phenotypes, including six Mythics earned through research.
 
 ## Quests, automation, and exhibitions
 
-- The Field Guide shows every species as a silhouette until you discover it. Revealed entries stay in your guide after selling a plant.
+- The Field Guide shows every species as a silhouette until you discover it. Buy one saved hint per undiscovered species for 25 coins. Breeding hints give a compatible pair, Common plants point to the Market, and Mythics point to their research commission. Revealed entries stay in your guide after selling a plant.
 - Open **Quests** to follow 25 quests across collection, breeding, pruning, and collector orders. Existing discoveries and potted offspring count. Earlier order deliveries count when they are still represented in the saved order board.
 - The Market sells a **Coin collector** for 120 coins after discovering four species. It transfers whole display coins into your wallet, including during offline catch-up.
 - A **Display curator** costs 360 coins and unlocks at ten species. It places your highest-earning plants on display and rechecks them during catch-up. Use Pause to arrange displays yourself. Manually changing a display also pauses the curator.

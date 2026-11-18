@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const G = window.Garden;
-  const { SPECIES, CATALOG, RARITIES, LOCATIONS, GOALS, SUPPLIES, AUTOMATIONS, QUEST_TRACKS, EXHIBITIONS, MYTHIC_RESEARCH, POT_STYLES, SOIL_MIXES, GROW_LAMP, HOUR } = G;
+  const { SPECIES, CATALOG, RARITIES, LOCATIONS, MAX_DISPLAY_SPOTS, HINT_COST, ORDER_LIMIT, GOALS, SUPPLIES, AUTOMATIONS, QUEST_TRACKS, EXHIBITIONS, MYTHIC_RESEARCH, POT_STYLES, SOIL_MIXES, GROW_LAMP, HOUR } = G;
   const STORE = "verdant-greenhouse-v1";
   const app = document.querySelector("#app");
   const dialog = document.querySelector("#dialog");
@@ -591,8 +591,9 @@
             extra: `aria-label="Double shelf space for ${numberFormat.format(spaceCost)} coins"`, disabled: state.coins < spaceCost,
           })}</article>
         <article class="paper supply-card"><span class="tile-icon">${icon("display")}</span>
-          <div><h3>Display spot</h3><p>Earn coins from one more plant.</p><small>${G.displayCapacity(state)} total spots</small></div>
-          ${button(coins(displayCost), "buy-display", { extra: `aria-label="Buy one display spot for ${displayCost} coins"`, disabled: state.coins < displayCost })}</article>
+          <div><h3>Display spot</h3><p>Earn coins from one more plant.</p><small>${G.displayCapacity(state)} / ${MAX_DISPLAY_SPOTS} spots</small></div>
+          ${displayCost === null ? '<span class="count-pill">Display limit reached</span>' :
+            button(coins(displayCost), "buy-display", { extra: `aria-label="Buy one display spot for ${displayCost} coins"`, disabled: state.coins < displayCost })}</article>
         ${supplies}
       </div>
       ${automationShop()}
@@ -621,29 +622,41 @@
   const orderLabels = {
     grow: ["Room to grow", "sprout"], prune: ["Shaped by hand", "prune"], phenotype: ["A collector’s eye", "leaf"],
     healthy: ["In good health", "heart"], bonsai: ["Small tree, big character", "branch"], windowsill: ["For the windowsill", "sun"],
+    foliage: ["Foliage collector", "leaf"], succulent: ["A desert garden", "sun"], mature: ["An established specimen", "sprout"],
+    tropical: ["Rainforest collection", "mist"], flowering: ["In bloom", "leaf"], shaped: ["A living sculpture", "prune"],
+    gallery: ["Ready for the gallery", "display"], homegrown: ["Raised in your nursery", "dna"],
+    cutting: ["Rooted with care", "sprout"], rare: ["A rare commission", "star"],
+    legendary: ["Conservatory centrepiece", "trophy"], mythic: ["A Mythic commission", "star"],
+  };
+  const shapeNames = {
+    tree: "Any tree", fern: "Any fern", bush: "Any bushy plant", heart: "Any heart-leaf plant",
+    trailing: "Any trailing plant", grass: "Any grass-like plant", succulent: "Any succulent", flower: "Any flowering plant",
   };
 
   function orderRequirement(order) {
     const species = SPECIES[order.species];
-    switch (order.slot) {
-      case "grow": return `Any Common plant at ${order.size}% maturity or higher.`;
-      case "prune": return `${species.name} at ${order.size}% maturity or higher and Shape ${order.quality} or better.`;
-      case "phenotype": return `${species.name} with the ${species.phenotypes[order.pheno]} phenotype.`;
-      case "healthy": return `Any Common plant at ${order.health}% health or higher.`;
-      case "bonsai": return `Any tree at ${order.size}% maturity or higher and Shape ${order.quality} or better.`;
-      case "windowsill": return `${species.name} at ${order.size}% maturity or higher.`;
-    }
+    const name = species ? species.name : order.tier !== undefined ? `Any ${RARITIES[order.tier]} plant` :
+      shapeNames[order.shape] ?? "Any plant";
+    const needs = [];
+    if (order.pheno !== undefined) needs.push(`${species.phenotypes[order.pheno]} phenotype`);
+    if (order.size) needs.push(`${order.size}% maturity`);
+    if (order.health) needs.push(`${order.health}% health`);
+    if (order.quality) needs.push(`Shape ${order.quality} or better`);
+    if (order.displayIncome) needs.push(`at least ${hourlyCoins(order.displayIncome)} on display`);
+    if (order.origin) needs.push(order.origin === "cutting" ? "grown from a cutting" : "grown from a cross");
+    return [name, ...needs].join(" · ");
   }
 
   function orders(now) {
     return `${pageIntro("Collector Orders", "Deliver plants to local collectors for their sale value plus a coin bonus.", "clipboard",
       `<span class="count-pill">${icon("clock")} Daily refresh in ${countdown(G.nextOrderDay(now))}</span>`)}
       <section aria-labelledby="orders-title">
-        <div class="section-heading listing-heading"><h2 id="orders-title">Order board</h2></div>
-        <p class="section-description">A new request appears after each delivery. Open orders refresh at local midnight, and you can pin one to keep it.</p>
+        <div class="section-heading listing-heading"><h2 id="orders-title">Order board</h2>
+          <span class="count-pill">${state.orders.entries.length} / ${ORDER_LIMIT} active requests</span></div>
+        <p class="section-description">Each delivery brings a different request from the available pool. More order types unlock as your collection grows. Pin one to keep it through the midnight refresh.</p>
         <div class="order-grid">${state.orders.entries.map(order => {
-          const matches = state.plants.some(plant => G.orderMatches(order, plant));
-          const [title, symbol] = orderLabels[order.slot];
+          const matches = state.plants.some(plant => G.orderMatches(order, plant, state));
+          const [title, symbol] = orderLabels[order.type ?? order.slot];
           return `<article class="paper order-card ${order.pinned ? "pinned-order" : ""}" data-order-slot="${order.slot}">
             <div class="goal-top"><span class="tile-icon">${icon(symbol)}</span>
               ${button(order.pinned ? "Pinned" : "Pin order", "pin-order", { symbol: "pin", className: "compact",
@@ -768,8 +781,13 @@
         <div class="catalog-grid">${filtered.map(species => {
           if (!hasDiscovered(species)) return `<article class="paper catalog-card undiscovered-card">
             <div class="catalog-art rarity-back-${species.tier}">${tierBadge(species)}<span class="plant-silhouette">${canvas(species, { size: 58 })}</span></div>
-            <div class="catalog-copy"><h3>Undiscovered plant</h3><p>Find it at the market or through breeding.</p>
-              ${button("Discover to reveal", "inspect", { symbol: "lock", className: "catalog-button", disabled: true })}</div>
+            <div class="catalog-copy"><h3>${state.breedingHints[species.id] ? species.name : "Undiscovered plant"}</h3>
+              <p>${state.breedingHints[species.id] ? "Your hint is saved for this species." : "Unlock one discovery hint for 25 coins."}</p>
+              ${button(state.breedingHints[species.id] ? "View hint" : `Buy hint ${coins(HINT_COST)}`, "plant-hint", {
+                symbol: state.breedingHints[species.id] ? "book" : "info", className: "catalog-button",
+                extra: `data-id="${species.id}" aria-label="${state.breedingHints[species.id] ? "View saved discovery hint" : "Buy discovery hint for " + HINT_COST + " coins"}"`,
+                disabled: !state.breedingHints[species.id] && state.coins < HINT_COST,
+              })}</div>
           </article>`;
           const found = species.phenotypes.map((_, i) => i).filter(i => state.discovered.includes(`${species.id}:${i}`));
           return `<article class="paper catalog-card">
@@ -825,6 +843,29 @@
     if (!dialog.open) dialog.showModal();
   }
 
+  function showPlantHint(species) {
+    const hint = state.breedingHints[species.id];
+    if (!hint) return;
+    const portrait = `<div class="hint-portrait plant-silhouette">${canvas(species, { size: 58 })}</div>`;
+    let detail;
+    if (hint.kind === "breeding") {
+      const [first, second] = hint.parents.map(id => SPECIES[id]);
+      detail = `<p class="hint-pair">${first.name}<span aria-hidden="true"> × </span>${second.name}</p>
+        <p>Breed these species with at least 72% health and 42% maturity. This pair can produce ${species.name}. Each attempt can yield different offspring.</p>`;
+    } else if (hint.kind === "research") {
+      const research = MYTHIC_RESEARCH.find(item => item.id === hint.research);
+      detail = `<p>Complete <strong>${research.name}</strong> in Mythic research to earn a sealed seed for this plant.</p>
+        <p>Fund the commission after meeting its requirements, then pot the seed after two hours.</p>
+        <a class="button primary compact hint-link" href="#quests">Open Mythic research ${icon("arrow")}</a>`;
+    } else {
+      detail = `<p>Buy ${species.name} from the Market. Its selection rotates every five minutes.</p>
+        <p>Raise a second specimen to breed more phenotypes of this species.</p>
+        <a class="button primary compact hint-link" href="#market">Open Market ${icon("arrow")}</a>`;
+    }
+    openDialog(species.name, `${portrait}<div class="hint-detail">${detail}</div>
+      <p class="hint-saved">${icon("check")} This hint is saved in your Field Guide.</p>`, tierBadge(species));
+  }
+
   function showEntry(species) {
     const variants = species.phenotypes.map((name, i) => {
       const found = state.discovered.includes(`${species.id}:${i}`);
@@ -834,7 +875,8 @@
     const needs = G.careNeeds({ species: species.id }, Date.now());
     openDialog(species.name, `<p>${species.note}</p>
       <p class="species-needs">${icon("sun")} ${LOCATIONS[needs.light]} now · Water below ${needs.dry}%${needs.humidity ? ` · Mist below ${needs.humidity}% humidity` : ""}</p>
-      <h3>Phenotypes</h3><div class="phenotypes">${variants}</div>`, tierBadge(species));
+      <h3>Phenotypes</h3><div class="phenotypes">${variants}</div>
+      ${state.breedingHints[species.id] ? `<div class="dialog-actions">${button("View saved hint", "plant-hint", { symbol: "book", extra: `data-id="${species.id}"` })}</div>` : ""}`, tierBadge(species));
   }
 
   function showFamily(id) {
@@ -1222,14 +1264,14 @@
   }
 
   function chooseDelivery(order) {
-    const options = state.plants.filter(plant => G.orderMatches(order, plant)).map(plant => {
+    const options = state.plants.filter(plant => G.orderMatches(order, plant, state)).map(plant => {
       const payout = G.salePrice(plant) + order.bonus;
       return button(`<span>${plantName(plant)} #${plant.id}<small>${plantDetail(plant)} · ${percent(plant.size)}% mature</small></span>
         <span class="goal-reward">${coins(payout)}</span>`, "deliver-order", {
         className: "delivery-option", extra: `data-id="${order.id}" data-plant="${plant.id}" aria-label="Deliver ${plantName(plant)} number ${plant.id} for ${payout} coins"`,
       });
     }).join("");
-    openDialog(orderLabels[order.slot][0], `<p>${orderRequirement(order)} The plant you deliver leaves your shelf.</p>
+    openDialog(orderLabels[order.type ?? order.slot][0], `<p>${orderRequirement(order)} The plant you deliver leaves your shelf.</p>
       <div class="delivery-options">${options || "<p>No plants currently meet this order.</p>"}</div>`);
   }
 
@@ -1267,6 +1309,15 @@
       case "close":
         dialog.close();
         return;
+      case "plant-hint":
+        if (!species) return;
+        if (state.breedingHints[id]) {
+          showPlantHint(species);
+          return;
+        }
+        if (!G.buyBreedingHint(state, id)) return "This discovery hint is unavailable.";
+        showPlantHint(species);
+        return confirmed("Discovery hint unlocked and saved.", walletMotion);
       case "inspect":
         if (species && G.speciesUnlocked(state, species)) showEntry(species);
         return;
@@ -1466,7 +1517,8 @@
         return confirmed(`Shelf space doubled. You now have ${numberFormat.format(state.capacity)} spaces.`, ["#shelf-upgrade"], walletMotion);
       }
       case "buy-display":
-        if (!G.buyDisplaySpot(state)) return "You need more coins for a display spot.";
+        if (!G.buyDisplaySpot(state)) return G.displaySpotCost(state) === null ?
+          "All 16 display spots are owned." : "You need more coins for a display spot.";
         return confirmed(`Display spot added. You now have ${G.displayCapacity(state)} spots.`,
           ['.supply-card:has([data-action="buy-display"])'], walletMotion);
       case "buy-supply": {

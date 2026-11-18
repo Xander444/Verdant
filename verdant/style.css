@@ -569,6 +569,14 @@ dialog::backdrop { background: #0a241c99; backdrop-filter: blur(4px); }
 }
 .family-art .plant-art { width: min(100%, 160px); height: auto; }
 .family-group + p { margin-top: 12px; }
+.hint-portrait {
+  display: grid; place-items: center; height: 148px; margin: 8px 0 11px; overflow: hidden; border-radius: 10px;
+  background: radial-gradient(at 30% 10%, #fff5d6, transparent 75%), linear-gradient(#e6eddf 80%, #ceddc9 80%);
+}
+.hint-portrait .plant-art { width: 165px; }
+.dialog-inner .hint-pair { color: var(--green); font-size: 1rem; font-weight: 700; }
+.hint-detail p + p, .hint-link { margin-top: 9px; }
+.dialog-inner .hint-saved { color: var(--green); font-size: .75rem; margin-top: 13px; padding-top: 9px; border-top: 1px solid var(--line); }
 .compare-maturity {
   display: flex; align-items: center; gap: 7px; width: fit-content; margin-bottom: 9px;
   color: var(--muted); font-size: .8rem; cursor: pointer;
