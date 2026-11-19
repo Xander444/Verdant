@@ -41,7 +41,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 
 ## Quests, automation, and exhibitions
 
-- The Field Guide shows every species as a silhouette until you discover it. Buy one saved hint per undiscovered species for 25 coins. Breeding hints give a compatible pair, Common plants point to the Market, and Mythics point to their research commission. Revealed entries stay in your guide after selling a plant.
+- The Field Guide shows every species as a silhouette until you discover it. Buy one saved grower's note per undiscovered species: Common 10 coins, Uncommon 20, Rare 200, Legendary 2,000, and Mythic 5,000. Uncommon notes name a compatible pair, Rare notes name one parent and describe the other, and Legendary notes combine a surviving name with a riddle. Common notes suggest the Market; Mythic notes hint at the relevant research trail. The target's name and artwork stay hidden until discovery. Notes bought in earlier versions stay unlocked without another charge. Revealed entries stay in your guide after selling a plant.
 - Open **Quests** to follow 25 quests across collection, breeding, pruning, and collector orders. Existing discoveries and potted offspring count. Earlier order deliveries count when they are still represented in the saved order board.
 - The Market sells a **Coin collector** for 120 coins after discovering four species. It transfers whole display coins into your wallet, including during offline catch-up.
 - A **Display curator** costs 360 coins and unlocks at ten species. It places your highest-earning plants on display and rechecks them during catch-up. Use Pause to arrange displays yourself. Manually changing a display also pauses the curator.

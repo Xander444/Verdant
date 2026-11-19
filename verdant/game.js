@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const G = window.Garden;
-  const { SPECIES, CATALOG, RARITIES, LOCATIONS, MAX_DISPLAY_SPOTS, HINT_COST, ORDER_LIMIT, GOALS, SUPPLIES, AUTOMATIONS, QUEST_TRACKS, EXHIBITIONS, MYTHIC_RESEARCH, POT_STYLES, SOIL_MIXES, GROW_LAMP, HOUR } = G;
+  const { SPECIES, CATALOG, RARITIES, LOCATIONS, MAX_DISPLAY_SPOTS, HINT_LORE, ORDER_LIMIT, GOALS, SUPPLIES, AUTOMATIONS, QUEST_TRACKS, EXHIBITIONS, MYTHIC_RESEARCH, POT_STYLES, SOIL_MIXES, GROW_LAMP, HOUR } = G;
   const STORE = "verdant-greenhouse-v1";
   const app = document.querySelector("#app");
   const dialog = document.querySelector("#dialog");
@@ -783,16 +783,17 @@
         <div class="meter" aria-hidden="true" style="--value:${100 * discovered / CATALOG.length}%"><span></span></div></div>`)}
       <section aria-labelledby="catalog-title">
         <div class="section-heading listing-heading"><div class="heading-with-count"><h2 id="catalog-title">Plant catalog</h2><span class="count-pill">${state.discovered.length} / ${totalPhenotypes} phenotypes</span></div>${rarityFilter("guideFilter", view.guideFilter)}</div>
-        ${hidden ? `<p class="inline-note">${icon("lock")} ${hidden} ${hidden === 1 ? "silhouette awaits" : "silhouettes await"} discovery.</p>` : ""}
+        ${hidden ? `<p class="inline-note">${icon("lock")} ${hidden} ${hidden === 1 ? "silhouette awaits" : "silhouettes await"} discovery. Rarer plants have more cryptic notes.</p>` : ""}
         <div class="catalog-grid">${filtered.map(species => {
+          const hintPrice = G.hintCost(species);
           if (!hasDiscovered(species)) return `<article class="paper catalog-card undiscovered-card">
             <div class="catalog-art rarity-back-${species.tier}">${tierBadge(species)}<span class="plant-silhouette">${canvas(species, { size: 58 })}</span></div>
-            <div class="catalog-copy"><h3>${state.breedingHints[species.id] ? species.name : "Undiscovered plant"}</h3>
-              <p>${state.breedingHints[species.id] ? "Your hint is saved for this species." : "Unlock one discovery hint for 25 coins."}</p>
-              ${button(state.breedingHints[species.id] ? "View hint" : `Buy hint ${coins(HINT_COST)}`, "plant-hint", {
+            <div class="catalog-copy"><h3>Undiscovered plant</h3>
+              <p>${state.breedingHints[species.id] ? "Your grower's note is saved for this species." : `Unlock one discovery hint for ${numberFormat.format(hintPrice)} coins.`}</p>
+              ${button(state.breedingHints[species.id] ? "View hint" : `Buy hint ${coins(hintPrice)}`, "plant-hint", {
                 symbol: state.breedingHints[species.id] ? "book" : "info", className: "catalog-button",
-                extra: `data-id="${species.id}" aria-label="${state.breedingHints[species.id] ? "View saved discovery hint" : "Buy discovery hint for " + HINT_COST + " coins"}"`,
-                disabled: !state.breedingHints[species.id] && state.coins < HINT_COST,
+                extra: `data-id="${species.id}" aria-label="${state.breedingHints[species.id] ? "View saved discovery hint" : "Buy discovery hint for " + hintPrice + " coins"}"`,
+                disabled: !state.breedingHints[species.id] && state.coins < hintPrice,
               })}</div>
           </article>`;
           const found = species.phenotypes.map((_, i) => i).filter(i => state.discovered.includes(`${species.id}:${i}`));
@@ -853,23 +854,26 @@
     const hint = state.breedingHints[species.id];
     if (!hint) return;
     const portrait = `<div class="hint-portrait plant-silhouette">${canvas(species, { size: 58 })}</div>`;
-    let detail;
+    let detail = `<p class="hint-observation">${HINT_LORE.legendary[species.id] ?? species.note}</p>`;
     if (hint.kind === "breeding") {
       const [first, second] = hint.parents.map(id => SPECIES[id]);
-      detail = `<p class="hint-pair">${first.name}<span aria-hidden="true"> × </span>${second.name}</p>
-        <p>Breed these species with at least 72% health and 42% maturity. This pair can produce ${species.name}. Each attempt can yield different offspring.</p>`;
+      detail += species.tier === 1 ?
+        `<p>A grower's notebook places <strong>${first.name}</strong> beside <strong>${second.name}</strong>. Their seedlings are worth a closer look.</p>` :
+        `<p>${species.tier === 3 ? "A torn nursery label" : "A grower's record"} mentions <strong>${first.name}</strong>. ${species.tier === 3 ?
+          "Beneath it, a second hand left only this line:" : "The other plant was described only as:"}</p>
+        <blockquote class="hint-riddle">${HINT_LORE.parents[second.id]}</blockquote>`;
+      detail += '<p class="hint-footnote">A clue to follow; each cross can yield different offspring.</p>';
     } else if (hint.kind === "research") {
-      const research = MYTHIC_RESEARCH.find(item => item.id === hint.research);
-      detail = `<p>Complete <strong>${research.name}</strong> in Mythic research to earn a sealed seed for this plant.</p>
-        <p>Fund the commission after meeting its requirements, then pot the seed after two hours.</p>
-        <a class="button primary compact hint-link" href="#quests">Open Mythic research ${icon("arrow")}</a>`;
+      detail = `<p class="hint-observation">${HINT_LORE.mythic[species.id]}</p>
+        <p>This trail leads through the conservatory's research commissions.</p>
+        <a class="button primary compact hint-link" href="#quests">Open Quests</a>`;
     } else {
-      detail = `<p>Buy ${species.name} from the Market. Its selection rotates every five minutes.</p>
-        <p>Raise a second specimen to breed more phenotypes of this species.</p>
-        <a class="button primary compact hint-link" href="#market">Open Market ${icon("arrow")}</a>`;
+      detail += `<p>Not every discovery begins with a cross. Look for a pot like this among the rotating Market stalls.</p>
+        <a class="button primary compact hint-link" href="#market">Open Market</a>`;
     }
-    openDialog(species.name, `${portrait}<div class="hint-detail">${detail}</div>
-      <p class="hint-saved">${icon("check")} This hint is saved in your Field Guide.</p>`, tierBadge(species));
+    const discovered = state.discovered.some(key => key.startsWith(species.id + ":"));
+    openDialog(discovered ? species.name : `${RARITIES[species.tier]} grower's note`, `${portrait}<div class="hint-detail">${detail}</div>
+      <p class="hint-saved">${icon("check")} This note is saved in your Field Guide.</p>`, tierBadge(species));
   }
 
   function showEntry(species) {

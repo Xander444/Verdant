@@ -11,7 +11,7 @@ window.Garden = (() => {
   const FAVOR_WEIGHT = .80;
   const STARTING_DISPLAY_SPOTS = 2;
   const MAX_DISPLAY_SPOTS = 16;
-  const HINT_COST = 25;
+  const HINT_COSTS = [10, 20, 200, 2000, 5000];
   const ORDER_LIMIT = 6;
   const ORDER_SLOTS = ["grow", "prune", "phenotype", "healthy", "bonsai", "windowsill"];
   const STARTING_SHELF_SPACE = 4;
@@ -122,6 +122,51 @@ window.Garden = (() => {
   const STANDARD_CATALOG = CATALOG.filter(species => species.tier < 4);
   const MYTHIC_SPECIES = CATALOG.filter(species => species.tier === 4);
   const SPECIES = Object.fromEntries(CATALOG.map(species => [species.id, species]));
+  const hintCost = species => HINT_COSTS[species.tier];
+  const HINT_LORE = {
+    parents: {
+      polka: "The guest who wore confetti before the party began.",
+      velvet: "A dark shield, soft to the eye, stitched in silver.",
+      purple: "Three wine-dark wings that fold when the light fades.",
+      snake: "A silver blade that never leaves its sheath.",
+      prayer: "Patterned hands that rise when evening arrives.",
+      nerve: "A living map whose roads are brighter than its fields.",
+      rex: "A royal spiral wearing rings of burgundy and silver.",
+      ponytail: "A fountain tied back with a curling green ribbon.",
+      elm: "A zigzag road beneath a canopy of little saw-toothed leaves.",
+      pomegranate: "A small wooden crown, carrying scarlet blossoms instead of jewels.",
+      pink: "The dark-leaved heir who keeps a piece of the rose.",
+      jewel: "A treasure whose fine metalwork grows beneath its flowers.",
+      blue: "A wandering sea-colored star, divided into fronds.",
+      cotton: "A cloud of fairground sugar stretched into a heart.",
+      string: "A necklace of red stones that spills toward the earth.",
+      satin: "Moonlight brushed across a long green ribbon.",
+      strawberry: "A rosy runner named for fruit it never bears.",
+      painted: "A lady whose brush never quite rinses clean.",
+      maple: "A small tree holding five-pointed flames.",
+      olive: "An old grove's silver undersides, folded into a single pot.",
+    },
+    legendary: {
+      constellation: "Someone scattered the night sky across a split leaf. No gardener remembers planting stars.",
+      spirit: "A pale stranger arrives before its own shadow. Its oldest leaves remember more color than its youngest.",
+      black: "A winged shape hangs in the undergrowth, trailing whiskers through the dark.",
+      glass: "Light passes through the leaf tips as though they were windows. The roots insist this is still a plant.",
+      fire: "By dusk, the youngest fronds seem to be keeping a little of the sun for themselves.",
+      queen: "A long velvet leaf wears a silver thread like a crown. Its family tree has an unfinished line.",
+      echeveria: "A pale rosette gathers dust that no cloth should touch. Sunset leaves a faint blush on its edges.",
+      aurora: "A ribbon of twilight has taken root. Its colors drift along the stem, as though dawn cannot settle.",
+      wisteria: "A tiny old tree dreams of rain falling in lilac chains.",
+      juniper: "A silver cloud rests on a crooked branch, but there is no wind inside the pot.",
+    },
+    mythic: {
+      moonlotus: "A lost page speaks of many kinds of flowers, raised to maturity in good health, and a grower decorated at conservatory exhibitions. The seed never reached a market stall.",
+      embermaple: "Follow the record of a forest that fits in pots. Its keeper gathered many kinds of trees, shaped four elders to perfection, and won ribbons for a miniature woodland.",
+      silverfern: "The missing silver thread runs through propagation records: generations raised from crosses, roots coaxed from cuttings, and an herbarium rich in leaf patterns.",
+      glassorchid: "Its wings were last seen after the ordinary greenhouse collection was complete. A rich archive of leaf patterns, many new generations, and exhibition ribbons may open the reserve.",
+      dawnwood: "Five carefully shaped elders stand at the gate to an ancient woodland. Its miniature forest has earned many ribbons, and visitors have paid well to see it.",
+      nightqueen: "The last crown waits beyond three other wonders. Its keeper has served a hundred collectors, earned a fortune from visitors, and won many ribbons beneath the rare canopy.",
+    },
+  };
   const SUPPLIES = {
     fertilizer: { name: "Fertilizer", icon: "fertilizer", cost: 12, quantity: 3, description: "3 doses that support healthy growth." },
     tonic: { name: "Root tonic", icon: "heart", cost: 8, quantity: 2, description: "2 doses to help a struggling plant recover." },
@@ -816,11 +861,11 @@ window.Garden = (() => {
   function buyBreedingHint(state, speciesId) {
     initializeProgression(state);
     const species = Object.hasOwn(SPECIES, speciesId) && SPECIES[speciesId];
-    if (!species || Object.hasOwn(state.breedingHints, speciesId) || state.coins < HINT_COST ||
+    if (!species || Object.hasOwn(state.breedingHints, speciesId) || state.coins < hintCost(species) ||
         state.discovered.some(key => key.startsWith(speciesId + ":"))) return false;
     const hint = makeBreedingHint(state, species);
     if (!hint) return false;
-    state.coins -= HINT_COST;
+    state.coins -= hintCost(species);
     state.breedingHints[speciesId] = hint;
     return true;
   }
@@ -1313,7 +1358,7 @@ window.Garden = (() => {
   ];
 
   return {
-    MINUTE, HOUR, CROSS_COST, RARITIES, MAX_DISPLAY_SPOTS, HINT_COST, ORDER_LIMIT, buyBreedingHint, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES, GROW_LAMP, GROW_LAMP_SLOTS,
+    MINUTE, HOUR, CROSS_COST, RARITIES, MAX_DISPLAY_SPOTS, HINT_COSTS, hintCost, HINT_LORE, ORDER_LIMIT, buyBreedingHint, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES, GROW_LAMP, GROW_LAMP_SLOTS,
     CATALOG, SPECIES, SUPPLIES, GOALS, POT_STYLES, SOIL_MIXES, clamp, traitsFor, traitScales,
     initializeProgression, AUTOMATIONS, automationActive, buyAutomation, toggleAutomation, curateDisplays, collectDisplayCoins,
     displayMultiplier, promotionCost, buyPromotion, QUEST_TRACKS, activeQuest, questProgress, claimQuest,

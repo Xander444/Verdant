@@ -576,7 +576,9 @@ dialog::backdrop { background: #0a241c99; backdrop-filter: blur(4px); }
   background: radial-gradient(at 30% 10%, #fff5d6, transparent 75%), linear-gradient(#e6eddf 80%, #ceddc9 80%);
 }
 .hint-portrait .plant-art { width: 165px; }
-.dialog-inner .hint-pair { color: var(--green); font-size: 1rem; font-weight: 700; }
+.dialog-inner .hint-observation { color: var(--green); font-size: 1rem; line-height: 1.5; }
+.hint-riddle { margin: 12px 0; padding: 12px 15px; border-left: 3px solid #a7b892; background: #edf2e5; border-radius: 0 8px 8px 0; color: var(--green); font-style: italic; line-height: 1.6; }
+.dialog-inner .hint-footnote { color: var(--muted); font-size: .8rem; }
 .hint-detail p + p, .hint-link { margin-top: 9px; }
 .dialog-inner .hint-saved { color: var(--green); font-size: .75rem; margin-top: 13px; padding-top: 9px; border-top: 1px solid var(--line); }
 .compare-maturity {
