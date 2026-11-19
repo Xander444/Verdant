@@ -47,6 +47,7 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - A **Display curator** costs 360 coins and unlocks at ten species. It places your highest-earning plants on display and rechecks them during catch-up. Use Pause to arrange displays yourself. Manually changing a display also pauses the curator.
 - At 12 discovered species, buy a **Self-watering greenhouse** for 5,000 coins. It keeps every plant in a safe watering range, maintains humidity, and manages light across all shelves. Existing grow-lamp space and growth bonuses still apply. Flooded soil dries naturally before watering resumes.
 - Add a **Fertilizer injector** for 7,500 coins after buying the watering system. It keeps nutrients at 85% or higher with an unlimited built-in fertilizer supply. Both upgrades are permanent, cover new plants automatically, and work during the same seven-day offline catch-up as growth. Pruning stays hands-on. Pause either upgrade in the Market; pausing watering also suspends the injector until watering is enabled again. Stored fertilizer doses stay available for manual care.
+- Automatic feeding applies immediately to Market purchases, potted crosses, rooted cuttings, Mythic research plants, and rescue plants. Restored saves also receive upkeep when no time has elapsed or the device clock has moved backward, without advancing growth or earnings.
 - At 20 discovered species, buy up to three **Visitor programme** levels. They cost 600, 1,200, and 2,400 coins and each add 10% to display earnings.
 - Discover 12 species to unlock three **Conservatory exhibitions** on the Quests page. Grow different qualifying species, then enter to earn coins and a permanent 5% display-income bonus for the first win in each category. Plants stay in your collection. Enter each category once per local day, with larger collections required as you win repeatedly.
 
@@ -59,6 +60,10 @@ Verdant is a real-time plant care and breeding game. Open `index.html` in a brow
 - After discovering 20 greenhouse species, buy **Grow-lamp extensions** in the Market. Each adds one spot, up to six total. They cost 1,000, 2,000, 4,000, and 8,000 coins.
 - **The lost conservatory** exhibition needs three different mature, healthy Mythic species. Repeat wins raise its required collection to six species. Its first ribbon gives the same permanent display-income bonus as other exhibitions.
 - The five **Mythic conservator** quests lead from your first research plant to completing all 240 phenotypes. Existing collection quests continue to count the original 40 greenhouse species and 204 phenotypes.
+
+## Checks
+
+Run `node --test verdant/tests/automatic-care.cjs` from the repository root. These checks cover all 46 species and 240 phenotypes, every plant acquisition route, offline feeding, pause controls, and restored saves.
 
 ## Artwork and typography
 

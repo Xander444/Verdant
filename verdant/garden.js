@@ -525,7 +525,11 @@ window.Garden = (() => {
 
   function advance(state, now) {
     initializeProgression(state);
-    if (now <= state.updatedAt) return;
+    if (now <= state.updatedAt) {
+      // Restored saves still receive upkeep without advancing growth or earnings.
+      applyAutomatedCare(state, now);
+      return;
+    }
     let cursor = Math.max(state.updatedAt, now - 7 * 24 * HOUR);
     while (cursor < now) {
       const date = new Date(cursor);
