@@ -247,6 +247,7 @@ window.Garden = (() => {
   function addPlant(state, species, pheno, now, source, traits) {
     const plant = makePlant(state, species, pheno, now, source, traits);
     state.plants.push(plant);
+    applyAutomatedCare(state, now);
     discover(state, plant);
     state.selected = plant.id;
     return plant;
@@ -400,6 +401,7 @@ window.Garden = (() => {
   }
 
   function lightWorks(plant, now, location = plant.location, state) {
+    if (automationActive(state, "watering")) return true;
     const ideal = lightTarget(SPECIES[plant.species], now);
     return location === ideal ||
       (ideal === 0 && curtainClosed(now, location, state)) ||
@@ -488,6 +490,7 @@ window.Garden = (() => {
       const next = Math.min(now, edge);
       const hours = (next - cursor) / HOUR;
       const phase = phaseAt(cursor);
+      applyAutomatedCare(state, cursor);
       curateDisplays(state);
       for (const plant of state.plants) {
         const species = SPECIES[plant.species];
@@ -525,6 +528,7 @@ window.Garden = (() => {
       }
       cursor = next;
     }
+    applyAutomatedCare(state, now);
     curateDisplays(state);
     if (state.automation.collector?.enabled) collectDisplayCoins(state);
     state.updatedAt = now;
@@ -967,7 +971,32 @@ window.Garden = (() => {
       name: "Display curator", cost: 360, species: 10, icon: "display",
       description: "Keeps your highest-earning plants on display. Manual display changes pause the curator.",
     },
+    watering: {
+      name: "Self-watering greenhouse", cost: 5000, species: 12, icon: "drop",
+      description: "Waters and mists every plant, with automatic light control across all shelves. Permanent care, including while you are away.",
+    },
+    fertigation: {
+      name: "Fertilizer injector", cost: 7500, species: 12, icon: "fertilizer", requires: "watering",
+      description: "Adds nutrients to the watering system for every plant. Includes unlimited fertilizer, leaving pruning in your hands.",
+    },
   };
+
+  function automationActive(state, id) {
+    const upgrade = Object.hasOwn(AUTOMATIONS, id) && AUTOMATIONS[id];
+    return Boolean(upgrade && state?.automation?.[id]?.enabled &&
+      (!upgrade.requires || automationActive(state, upgrade.requires)));
+  }
+
+  function applyAutomatedCare(state, now) {
+    if (!automationActive(state, "watering")) return;
+    const feeding = automationActive(state, "fertigation");
+    for (const plant of state.plants) {
+      const { min, max } = waterRange(plant, now);
+      if (plant.water < min) waterPlant(plant, (min + max) / 2 - plant.water, now);
+      plant.humidity = Math.max(plant.humidity, Math.max(68, careNeeds(plant, now).humidity + 10));
+      if (feeding) plant.nutrients = Math.max(plant.nutrients, 85);
+    }
+  }
 
   function collectDisplayCoins(state) {
     const amount = Math.floor(state.displayBank + .0000001);
@@ -991,9 +1020,11 @@ window.Garden = (() => {
   function buyAutomation(state, id) {
     initializeProgression(state);
     const upgrade = Object.hasOwn(AUTOMATIONS, id) && AUTOMATIONS[id];
-    if (!upgrade || state.automation[id] || discoveredCount(state) < upgrade.species || state.coins < upgrade.cost) return false;
+    if (!upgrade || state.automation[id] || discoveredCount(state) < upgrade.species || state.coins < upgrade.cost ||
+        (upgrade.requires && !state.automation[upgrade.requires])) return false;
     state.coins -= upgrade.cost;
     state.automation[id] = { enabled: true };
+    applyAutomatedCare(state, state.updatedAt);
     curateDisplays(state);
     if (state.automation.collector?.enabled) collectDisplayCoins(state);
     return true;
@@ -1003,6 +1034,7 @@ window.Garden = (() => {
     const upgrade = state.automation?.[id];
     if (!Object.hasOwn(AUTOMATIONS, id) || !upgrade) return false;
     upgrade.enabled = !upgrade.enabled;
+    applyAutomatedCare(state, state.updatedAt);
     curateDisplays(state);
     if (state.automation.collector?.enabled) collectDisplayCoins(state);
     return true;
@@ -1283,7 +1315,7 @@ window.Garden = (() => {
   return {
     MINUTE, HOUR, CROSS_COST, RARITIES, MAX_DISPLAY_SPOTS, HINT_COST, ORDER_LIMIT, buyBreedingHint, LOCATIONS, TREE_BRANCHES, BRANCH_LIMIT, STATION_UPGRADES, GROW_LAMP, GROW_LAMP_SLOTS,
     CATALOG, SPECIES, SUPPLIES, GOALS, POT_STYLES, SOIL_MIXES, clamp, traitsFor, traitScales,
-    initializeProgression, AUTOMATIONS, buyAutomation, toggleAutomation, curateDisplays, collectDisplayCoins,
+    initializeProgression, AUTOMATIONS, automationActive, buyAutomation, toggleAutomation, curateDisplays, collectDisplayCoins,
     displayMultiplier, promotionCost, buyPromotion, QUEST_TRACKS, activeQuest, questProgress, claimQuest,
     EXHIBITIONS, exhibitionStatus, enterExhibition, discoveredCount, STANDARD_CATALOG, MYTHIC_SPECIES,
     crossCost, crossProblem, cuttingCost, growLampCapacity, lampExtensionCost, buyLampExtension,

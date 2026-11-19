@@ -217,8 +217,8 @@
       mist: plant.mistedAt === null ? 0 : plant.mistedAt + HOUR, tonic: plant.tonicAt === null ? 0 : plant.tonicAt + 2 * HOUR };
     return {
       prune: G.canPrune(plant, now),
-      feed: timers.feed <= now && state.inventory.fertilizer > 0 && plant.nutrients < 84,
-      mist: timers.mist <= now && plant.humidity < 83,
+      feed: !G.automationActive(state, "fertigation") && timers.feed <= now && state.inventory.fertilizer > 0 && plant.nutrients < 84,
+      mist: !G.automationActive(state, "watering") && timers.mist <= now && plant.humidity < 83,
       tonic: timers.tonic <= now && state.inventory.tonic > 0 && plant.health < 94,
       timers,
     };
@@ -228,10 +228,12 @@
     const species = SPECIES[plant.species];
     const needs = G.careNeeds(plant, now);
     const allowed = controlsFor(plant, now);
+    const autoWater = G.automationActive(state, "watering");
+    const autoFeed = G.automationActive(state, "fertigation");
     const sick = plant.health < 55;
     const waterMood = plant.water < needs.dry ? "warning" : plant.water > needs.wet ? "warning" : "blue";
     const lightGood = G.lightWorks(plant, now, plant.location, state);
-    const lightTip = lightGood ? "Right for now" : !G.stationHasRoom(state, needs.light) ? "Grow lamp is full" :
+    const lightTip = autoWater ? "Auto-managed" : lightGood ? "Right for now" : !G.stationHasRoom(state, needs.light) ? "Grow lamp is full" :
       `Move to ${LOCATIONS[needs.light].toLowerCase()}`;
     const shallow = G.potStyle(plant) === "shallow" || (G.potStyle(plant) === "original" && species.shape === "tree");
     const stage = plant.size >= 83 ? "Mature" : plant.size >= 42 ? "Established" : plant.size >= 23 ? "Young plant" : "Seedling";
@@ -240,7 +242,7 @@
     const humidityLow = plant.humidity < needs.humidity;
     const displayAction = plant.onDisplay ? "Remove from display" :
       G.displayedPlants(state).length >= G.displayCapacity(state) ? "Swap onto display" : "Put on display";
-    const waterTip = plant.water < needs.dry ? "Soil is dry" : plant.water > needs.wet ? "Soil is too wet" : "Moisture is good";
+    const waterTip = plant.water > needs.wet ? "Soil is too wet" : autoWater ? "Auto-watered" : plant.water < needs.dry ? "Soil is dry" : "Moisture is good";
     return `<article class="care-card">
       <div class="plant-portrait paper">
         <div class="plant-scene ${shallow ? "bonsai-scene " : ""}phase-${G.phaseAt(now).name.toLowerCase()}">
@@ -266,20 +268,22 @@
             ${button(icon("book"), "inspect", { className: "icon-button", extra: `data-id="${species.id}" title="Open plant entry" aria-label="Open ${species.name} entry"` })}
           </div>
         </div>
+        ${autoWater ? `<p class="care-automation">${icon("check")}<span>${autoFeed ?
+          "Water, mist, light and feeding automated. Prune by hand." : "Water, mist and light automated. Feeding is manual."}</span></p>` : ""}
         <div class="metric-grid">
           ${metric("Health", "heart", `${percent(plant.health)}%`, healthTip, plant.health < 72 ? "warning" : "", plant.health)}
           ${metric("Water", "drop", `${percent(plant.water)}%`, waterTip, waterMood, plant.water)}
           ${metric("Maturity", "sprout", `${percent(plant.size)}%`, plant.size >= 42 ? "Breeding maturity met" : "Breeding at 42%", "", plant.size)}
           ${metric("Light", "sun", LOCATIONS[plant.location], lightTip, lightGood ? "" : "warning")}
-          ${metric("Humidity", "mist", `${percent(plant.humidity)}%`, !needs.humidity ? "No minimum" : humidityLow ? "Needs misting" : "Humidity is good", humidityLow ? "warning" : "blue", plant.humidity)}
-          ${metric("Nutrients", "fertilizer", `${percent(plant.nutrients)}%`, plant.nutrients < needs.food ? "Needs fertilizer" : "Nutrients are good", plant.nutrients < needs.food ? "warning" : "", plant.nutrients)}
+          ${metric("Humidity", "mist", `${percent(plant.humidity)}%`, autoWater ? "Auto-misted" : !needs.humidity ? "No minimum" : humidityLow ? "Needs misting" : "Humidity is good", humidityLow ? "warning" : "blue", plant.humidity)}
+          ${metric("Nutrients", "fertilizer", `${percent(plant.nutrients)}%`, autoFeed ? "Auto-fed" : plant.nutrients < needs.food ? "Needs fertilizer" : "Nutrients are good", plant.nutrients < needs.food ? "warning" : "", plant.nutrients)}
         </div>
         <div class="care-actions">
-          ${button("Water", "watering-can", { symbol: "can", className: "primary", extra: 'aria-label="Watering can"' })}
+          ${button("Water", "watering-can", { symbol: "can", className: "primary", disabled: autoWater, extra: `aria-label="Watering can"${autoWater ? ' title="Managed by the self-watering greenhouse"' : ""}` })}
           ${button("Move", "move", { symbol: "sun", extra: 'title="Choose where this plant gets its light"' })}
           ${button("Prune", "prune", { symbol: "prune", disabled: !allowed.prune, extra: `title="${allowed.timers.prune > now ? `Ready in ${remaining(allowed.timers.prune, now)}` : "Trim damaged leaves and improve the plant's shape"}"` })}
-          ${button(`Feed <small>${state.inventory.fertilizer}</small>`, "feed", { symbol: "fertilizer", disabled: !allowed.feed, extra: `title="${allowed.timers.feed > now ? `Ready in ${remaining(allowed.timers.feed, now)}` : "Use one dose of fertilizer"}"` })}
-          ${button("Mist", "mist", { symbol: "mist", disabled: !needs.humidity || !allowed.mist })}
+          ${button(`Feed <small>${state.inventory.fertilizer}</small>`, "feed", { symbol: "fertilizer", disabled: !allowed.feed, extra: `title="${autoFeed ? "Managed by the fertilizer injector" : allowed.timers.feed > now ? `Ready in ${remaining(allowed.timers.feed, now)}` : "Use one dose of fertilizer"}"` })}
+          ${button("Mist", "mist", { symbol: "mist", disabled: !needs.humidity || !allowed.mist, extra: autoWater ? 'title="Managed by the self-watering greenhouse"' : "" })}
           ${button(`Tonic <small>${state.inventory.tonic}</small>`, "tonic", { symbol: "heart", disabled: !allowed.tonic })}
         </div>
         <div class="plant-tools">
@@ -451,15 +455,17 @@
     const cards = Object.entries(AUTOMATIONS).map(([id, upgrade]) => {
       const owned = state.automation[id];
       const unlocked = discovered >= upgrade.species;
-      const status = owned ? owned.enabled ? "Active" : "Paused" :
-        unlocked ? "Available" : `Unlocks at ${upgrade.species} discovered species`;
+      const prerequisite = upgrade.requires && AUTOMATIONS[upgrade.requires].name;
+      const installed = !upgrade.requires || state.automation[upgrade.requires];
+      const status = owned ? !owned.enabled ? "Paused" : G.automationActive(state, id) ? "Active" : `Waiting for ${prerequisite}` :
+        !unlocked ? `Unlocks at ${upgrade.species} discovered species` : !installed ? `Requires ${prerequisite}` : "Available";
       return `<article class="paper automation-card" data-automation="${id}">
         <span class="tile-icon">${icon(upgrade.icon)}</span><div><h3>${upgrade.name}</h3><p>${upgrade.description}</p>
           <small>${status}</small></div>
         ${owned ? button(owned.enabled ? "Pause" : "Enable", "toggle-automation", {
           className: "compact", extra: `data-id="${id}" aria-label="${owned.enabled ? "Pause" : "Enable"} ${upgrade.name}" aria-pressed="${owned.enabled}"`,
         }) : button(coins(upgrade.cost), "buy-automation", {
-          className: "compact", disabled: !unlocked || state.coins < upgrade.cost,
+          className: "compact", disabled: !unlocked || !installed || state.coins < upgrade.cost,
           extra: `data-id="${id}" aria-label="Buy ${upgrade.name} for ${upgrade.cost} coins"`,
         })}
       </article>`;
@@ -1402,6 +1408,7 @@
           [`.station-${spot}`], walletMotion);
       }
       case "watering-can":
+        if (G.automationActive(state, "watering")) return "The self-watering greenhouse is caring for this plant.";
         if (plant) showWatering(plant, now);
         return;
       case "prune":
